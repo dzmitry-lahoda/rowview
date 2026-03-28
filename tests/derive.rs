@@ -37,5 +37,20 @@ mod schema {
 
 #[test]
 fn all() {
+    let orders = vec![
+        (1, (42,-500)),
+        (2, (43, 100)),
+        (1, (44, 400)),
+    ];
+    let root = Root {
+        market_id: 13,
+        orders,
+    };
 
+    let schema = orders.to_rows();
+
+    assert_eq!(schema.orders[0].market_id,  13);
+    assert_eq!(schema.orders[0].account_id,  1);
+    assert_eq!(schema.orders[0].order_id,  42);
+    assert_eq!(schema.orders[0].order_size,  -500);
 }
