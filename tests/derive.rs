@@ -1,6 +1,3 @@
-
-
-
 #[derive(rowview::RowView)]
 struct Root {
     market_id: u32,
@@ -8,19 +5,18 @@ struct Root {
 }
 
 
-#[derive(rowview::RowView)]
-#[rows(root = Root)]
+#[rowview::rows(root = Root)]
 mod schema {
-    #[rowset(name = "orders", axis = "orders")]
+    #[rowset(name = orders, axis = orders)]
     struct OrderRow {
-        #[copy]
-        market_id: Root.market_id,
-        #[from_axis]
-        account_id: Root.orders[].0
-        #[from_axis]
-        order_id: Root.orders[].1.0,
-        #[from_axis]
-        order_size: Root.orders[].1.1,
+        #[copy(root.market_id)]
+        market_id: u32,
+        #[from_axis(axis[..].0)]
+        account_id: u32,
+        #[from_axis(axis[..].1.0)]
+        order_id: u64,
+        #[from_axis(axis[..].1.1)]
+        order_size: i64,
     }
 }
 
@@ -47,7 +43,7 @@ fn all() {
         orders,
     };
 
-    let schema = orders.to_rows();
+    let schema = root.to_rows();
 
     assert_eq!(schema.orders[0].market_id,  13);
     assert_eq!(schema.orders[0].account_id,  1);
