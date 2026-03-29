@@ -1,3 +1,4 @@
+//! Tests are docs.
 type AccountId = u32;
 type MarketId = u16;
 type Balance = i64;

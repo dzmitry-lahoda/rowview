@@ -100,10 +100,6 @@ impl Parse for RowsetSpec {
     }
 }
 
-enum FieldKind {
-    Copy,
-    FromAxis,
-}
 
 struct FieldSpec {
     kind: FieldKind,
