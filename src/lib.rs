@@ -4,11 +4,6 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Expr, ExprField, ExprIndex, ExprPath, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
 
-#[proc_macro_derive(RowView)]
-pub fn derive_row_view(_input: TokenStream) -> TokenStream {
-    TokenStream::new()
-}
-
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as RowsArgs);
