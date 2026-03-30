@@ -54,7 +54,7 @@ impl Parse for RowsModule {
 
 struct RowsetSpec {
     rowset_name: Ident,
-    axis: Ident,
+    axis: Expr,
     struct_name: Ident,
     fields: Vec<FieldSpec>,
 }
@@ -142,6 +142,11 @@ impl Parse for FieldSpec {
     }
 }
 
+enum FieldKind {
+    Copy,
+    FromAxis,
+}
+
 fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
     let root = args.root;
     let module_vis = module.vis;
@@ -171,7 +176,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
 
     let builders = module.rowsets.iter().map(|rowset| {
         let rowset_name = &rowset.rowset_name;
-        let axis = &rowset.axis;
+        let axis = rewrite_source_expr(&rowset.axis, "root", quote! { self });
         let struct_name = &rowset.struct_name;
         let qualified_struct_name = quote! { #module_name::#struct_name };
         let field_inits = rowset.fields.iter().map(|field| {
@@ -184,7 +189,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
         });
 
         quote! {
-            #rowset_name: self.#axis.iter().map(|axis_item| {
+            #rowset_name: (#axis).iter().map(|axis_item| {
                 #qualified_struct_name {
                     #( #field_inits, )*
                 }
