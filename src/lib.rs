@@ -16,14 +16,14 @@ pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 struct RowsArgs {
-    root: Ty,
+    root: Ident,
 }
 
 impl Parse for RowsArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let key: Ident = input.parse()?;
         if key != ROOT_ATTR {
-            return Err(syn::Error::new(key.span(), "expected `${ROOT_ATTR} = Ty`"));
+            return Err(syn::Error::new(key.span(), "expected `${ROOT_ATTR} = Ident`"));
         }
         input.parse::<Token![=]>()?;
         Ok(Self {

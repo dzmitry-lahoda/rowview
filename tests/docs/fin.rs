@@ -1,4 +1,4 @@
-//! Tests are docs.
+
 use std::num::NonZero;
 
 type AccountId = u32;
