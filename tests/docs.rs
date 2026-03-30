@@ -4,6 +4,7 @@ type MarketId = u16;
 type Balance = i64;
 type TokenId = u16;
 type Size = i64;
+type OpenSize = u64;
 type OrderId = u64;
 type FundingIndex = i128;
 type ActionId = u64;
@@ -11,22 +12,32 @@ type Price = u64;
 
 struct Taker {
     added_order: Optio<(OrderId, Size)>,
+    pub account_id: AccountId,
+    pub client_order_id: Option<u64>,
 }
 
 struct TradeOrPlace {
     market_id: MarketId,
-  
-    balances_final: Vec<(AccountId, (TokenId, Option<Balance>))>,
-    pnl_delta: Vec<(AccountId, (TokenId, Balance))>,
-    funding_index: Vec<AccountId, Option<FundingIndex>>,
+    pub trade_id_base: u64,
+    pub taker : Taker,
+    pub accounts: TradedAccounts,
+    pub market_price: Option<Price>,
 }
 
 struct TradedAccounts {
     cancelled_orders: Vec<Order>,
     pub fills: Vec<Fill>,
+
+    open_final: Vec<(AccountId, Option<Open>)>,
+    balances_final: Vec<(AccountId, (TokenId, Option<Balance>))>,
+    pnl_delta: Vec<(AccountId, (TokenId, Balance))>,
+    funding_index_final: Vec<AccountId, Option<FundingIndex>>,
 }
 
-struct Action {}
+struct Action {
+    pub side: Side,
+    pub client_order_id: Option<u64>,
+}
 
 struct Root {
     action_id: ActionId,
@@ -78,32 +89,8 @@ fn all() {
     assert_eq!(schema.orders[0].order_size, -500);
 }
 
-// pub struct TradeOrPlaceReceipt {
-//     pub base_trade_id: TradeId,
-//     pub market_id: MarketId,
-//     pub accounts: TradedAccountsResult,
-//     pub market_price: Option<PositivePriceMantissa>,
-//     pub client_order_id: Option<SenderTrackingId>,
-//     pub sender_tracking_id: Option<SenderTrackingId>,
-//     /// Please note that part of info is in `accounts` field.
-//     pub taker: TakerResult,
-// }
 
-// pub struct TradedAccountsResult {
-//     /// All changed positions, exact same as retained in state after action.
-//     /// If None - no open position remained.
-//     pub open: Vec<(AccountId, Option<OpenOrdersPosition>)>,
-//     /// If None - position was closed.
-//     pub perp_size: Vec<(AccountId, Option<PositionEntry>)>,
-//     pub perp_funding: Vec<(AccountId, Option<FundingIndexMantissa>)>,
-//     /// If there, was applied.
-//     pub price_size_pnl: Vec<(AccountId, SidedBalance)>,
-//     /// If there, was applied.
-//     pub funding_index_pnl: Vec<(AccountId, SidedBalance)>,
-//     /// Ordering is significant; in case of duplicates last occurrence is authoritative.
-//     /// Exact balance as is.
-//     pub balances: Vec<(AccountId, TokenId, Balance)>,
-// }
+
 
 pub struct Fill {
     pub order_final: Order,
@@ -118,16 +105,10 @@ pub struct Order {
     pub size: Size,
 }
 
-// pub struct OpenOrdersPosition {
-//     ask_size: OrderSize,
-//     bid_size: OrderSize,
-//     orders_count: NonZero<u16>,
-//     bids_quote_size: u128,
-//     ask_quote_size: u128,
-// }
-
-// pub struct TakerResult {
-//     pub side: Side,
-//     pub taker_account_id: AccountId,
-//     pub(crate) posted: Option<(OrderRecord, ViewAccountOrder)>,
-// }
+pub struct Open {
+    ask_size: OpenSize,
+    bid_size: OpenSize,
+    orders_count: NonZero<u16>,
+    bids_quote_size: OpenSize,
+    ask_quote_size: OpenSize,
+}
