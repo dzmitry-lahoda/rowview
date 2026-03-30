@@ -1,8 +1,11 @@
+mod docs;
+
+use crate::docs::{AXIS_ATTR, FieldKind, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR, ROWS_SUFFIX};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, Expr, ExprField, ExprIndex, ExprPath, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
+use syn::{Attribute, Expr, ExprField, ExprIndex, ExprPath, Ident, Member, Result, Token, Type as Ty, Visibility, braced, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -13,14 +16,14 @@ pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 struct RowsArgs {
-    root: Ident,
+    root: Ty,
 }
 
 impl Parse for RowsArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let key: Ident = input.parse()?;
-        if key != "root" {
-            return Err(syn::Error::new(key.span(), "expected `root = TypeName`"));
+        if key != ROOT_ATTR {
+            return Err(syn::Error::new(key.span(), "expected `${ROOT_ATTR} = Ty`"));
         }
         input.parse::<Token![=]>()?;
         Ok(Self {
@@ -75,13 +78,13 @@ impl Parse for RowsetSpec {
         let mut rowset_name = None;
         let mut axis = None;
         for attr in attrs {
-            if attr.path().is_ident("rowset") {
+            if attr.path().is_ident(ROWSET_ATTR) {
                 attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("name") {
+                    if meta.path.is_ident(NAME_ATTR) {
                         rowset_name = Some(meta.value()?.parse()?);
                         return Ok(());
                     }
-                    if meta.path.is_ident("axis") {
+                    if meta.path.is_ident(AXIS_ATTR) {
                         axis = Some(meta.value()?.parse()?);
                         return Ok(());
                     }
@@ -92,8 +95,8 @@ impl Parse for RowsetSpec {
 
         Ok(Self {
             rowset_name: rowset_name
-                .ok_or_else(|| syn::Error::new(struct_name.span(), "missing `name`"))?,
-            axis: axis.ok_or_else(|| syn::Error::new(struct_name.span(), "missing `axis`"))?,
+                .ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${NAME_ATTR}`"))?,
+            axis: axis.ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${AXIS_ATTR}`"))?,
             struct_name,
             fields,
         })
@@ -121,11 +124,11 @@ impl Parse for FieldSpec {
         let mut expr = None;
         let name_span = name.span();
         for attr in attrs {
-            if attr.path().is_ident("copy") {
+            if attr.path().is_ident(FieldKind::Copy.as_str()) {
                 kind = Some(FieldKind::Copy);
                 expr = Some(attr.parse_args()?);
             }
-            if attr.path().is_ident("from_axis") {
+            if attr.path().is_ident(FieldKind::FromAxis.as_str()) {
                 kind = Some(FieldKind::FromAxis);
                 expr = Some(attr.parse_args()?);
             }
@@ -142,16 +145,11 @@ impl Parse for FieldSpec {
     }
 }
 
-enum FieldKind {
-    Copy,
-    FromAxis,
-}
-
 fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
     let root = args.root;
     let module_vis = module.vis;
     let module_name = module.name;
-    let rows_type = format_ident!("{}Rows", to_pascal_case(&module_name.to_string()));
+    let rows_type = format_ident!("{}{ROWS_SUFFIX}", to_pascal_case(&module_name.to_string()));
 
     let row_structs = module.rowsets.iter().map(|rowset| {
         let struct_name = &rowset.struct_name;
@@ -176,14 +174,14 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
 
     let builders = module.rowsets.iter().map(|rowset| {
         let rowset_name = &rowset.rowset_name;
-        let axis = rewrite_source_expr(&rowset.axis, "root", quote! { self });
+        let axis = rewrite_source_expr(&rowset.axis, ROOT_ATTR, quote! { self });
         let struct_name = &rowset.struct_name;
         let qualified_struct_name = quote! { #module_name::#struct_name };
         let field_inits = rowset.fields.iter().map(|field| {
             let name = &field.name;
             let value = match field.kind {
-                FieldKind::Copy => rewrite_source_expr(&field.expr, "root", quote! { self }),
-                FieldKind::FromAxis => rewrite_source_expr(&field.expr, "axis", quote! { axis_item }),
+                FieldKind::Copy => rewrite_source_expr(&field.expr, ROOT_ATTR, quote! { self }),
+                FieldKind::FromAxis => rewrite_source_expr(&field.expr, AXIS_ATTR, quote! { axis_item }),
             };
             quote! { #name: #value }
         });
@@ -235,7 +233,7 @@ fn to_pascal_case(name: &str) -> String {
         }
     }
     if out.is_empty() {
-        "Rows".to_string()
+        ROWS_SUFFIX.to_string()
     } else {
         out
     }

@@ -10,3 +10,4 @@ proc-macro = true
 syn = { version = "*", features = ["full"] }
 quote = "*"
 proc-macro2 = "*"
+strum = { version = "*", features = ["derive"] }
