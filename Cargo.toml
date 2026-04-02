@@ -11,3 +11,7 @@ syn = { version = "2", features = ["full"] }
 quote = "*"
 proc-macro2 = { version = "1" }
 strum = { version = "*", features = ["derive"] }
+# manyhow?
+
+[dev-dependencies]
+subdef ={ version = "*", features = ["derive"] }
