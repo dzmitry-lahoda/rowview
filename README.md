@@ -2,23 +2,34 @@
 
 # Features
 
-- fields
-- get method getters
-- closure getters
-- join_left
+- getters
+  - fields
+  - method
+  - closure
+- join
+  - left
+  - must 
   - custom filler
-- copy - one element at specific path copued into many records
-- delta(aggeregatable) or final value aware (last written is correct)
-- vector as map (tuple first element and property)
-- custom incrementers (+1, +2 for copy value; counters)
-- invariant hookson row constuction
-- update forms aware like `Option<Option<T>>` or `Option<T>` or `Either<T, ()>`  or `Either<T,T>` , where T may or may be Default. 
+- binding
+ - copy - one element at specific path copued into many records
+ - multiple rowsets
+- containers
+  - vector as map (tuple first element and property)
+  - map
+- context
+  - incrementers (+1, +2 for copy value; counters)
+- correctness
+   - invariants
+   - bijection of mapping
+   - fail fast or result error
+- semantics  
+  - update forms aware like `Option<Option<T>>` or `Option<T>` or `Either<T, ()>`  or `Either<T,T>` , where T may or may be Default. 
+  - delta(aggeregatable) or final value aware (last written is correct)
 
 # Limitations
 
 - Supports conversion of data from trusted source only.
 - Keys must be `Copy`
-
 
 # Guideliens
 
