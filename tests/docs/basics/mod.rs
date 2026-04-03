@@ -1,3 +1,3 @@
 mod singleton;
-mod left_join;
+mod join_left;
 mod join_must;

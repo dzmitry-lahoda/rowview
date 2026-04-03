@@ -18,19 +18,10 @@ fn multi() {
     
 }
 
-#[test]
-fn by_ref() {
-
-}
 
 #[test]
 fn std_map() {
     
 }
 
-
-#[test]
-fn any_map() {
-    
-}
 

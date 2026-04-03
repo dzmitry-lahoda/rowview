@@ -12,7 +12,12 @@
 - vector as map (tuple first element and property)
 - custom incrementers (+1, +2 for copy value; counters)
 - invariant hookson row constuction
-- update forms aware like `Option<Option<NonDefaultable>>` or `Option<Defaultable>` or `Add/Remove`
+- update forms aware like `Option<Option<T>>` or `Option<T>` or `Either<T, ()>`  or `Either<T,T>` , where T may or may be Default. 
+
+# Limitations
+
+- Supports conversion of data from trusted source only.
+- Keys must be `Copy`
 
 
 # Guideliens

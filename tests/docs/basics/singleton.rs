@@ -27,7 +27,7 @@ fn singleton() {
 
 
 #[test]
-fn deep_gleton() {
+fn deep_singleton() {
     #[subdef]
     struct Singleton {
         b: u32,
