@@ -1,0 +1,68 @@
+//! Primitive, simple structs, single depth, single item, single row, single array a like.
+//! One feature at a time.
+
+use subdef::subdef;
+
+#[test]
+fn singleton() {
+    #[subdef]
+    struct Singleton {
+        b: u32,
+    }
+
+    #[rowview::rows(root = Singleton)]
+    mod schema {
+        #[rowset(name = abs, axis = ())]
+        struct Ab {
+            #[copy(root.b)]
+            ab: u32,
+        }
+    }
+
+    let singleton = Singleton { b: 42 };
+    let rows = singleton.to_rows().abs;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].ab, 42);
+}
+
+
+#[test]
+fn deep_gleton() {
+    #[subdef]
+    struct D {
+        e: u8,
+    }
+
+    #[subdef]
+    struct C {
+        d: D,
+    }
+
+    #[subdef]
+    struct Singleton {
+        b: u32,
+        c: C,
+    }
+
+    #[rowview::rows(root = Singleton)]
+    mod schema {
+        #[rowset(name = abs, axis = ())]
+        struct Ab {
+            #[copy(root.b)]
+            ab: u32,
+            #[copy(root.c.d.e)]
+            cde: u8,
+        }
+    }
+
+    let singleton = Singleton {
+        b: 42,
+        c: C {
+            d: D { e: 33 },
+        },
+    };
+    let rows = singleton.to_rows().abs;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].ab, 42);
+    assert_eq!(rows[0].cde, 33);
+}

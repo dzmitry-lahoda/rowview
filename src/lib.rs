@@ -5,7 +5,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, Expr, ExprField, ExprIndex, ExprPath, Ident, Member, Result, Token, Type as Ty, Visibility, braced, parse_macro_input};
+use syn::{Attribute, Expr, ExprField, ExprIndex, ExprPath, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -186,12 +186,24 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             quote! { #name: #value }
         });
 
-        quote! {
-            #rowset_name: (#axis).iter().map(|axis_item| {
-                #qualified_struct_name {
+        let row_values = if matches!(&rowset.axis, Expr::Tuple(tuple) if tuple.elems.is_empty()) {
+            quote! {
+                ::std::iter::once(#qualified_struct_name {
                     #( #field_inits, )*
-                }
-            }).collect()
+                }).collect()
+            }
+        } else {
+            quote! {
+                (#axis).iter().map(|axis_item| {
+                    #qualified_struct_name {
+                        #( #field_inits, )*
+                    }
+                }).collect()
+            }
+        };
+
+        quote! {
+            #rowset_name: #row_values
         }
     });
 

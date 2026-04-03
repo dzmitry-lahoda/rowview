@@ -1,0 +1,1 @@
+//! Full join, panics if not found.

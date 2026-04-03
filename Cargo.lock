@@ -33,6 +33,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strum",
+ "subdef",
  "syn",
 ]
 
@@ -52,6 +53,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
 dependencies = [
  "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "subdef"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7269deaa0be1a2746d2d2d276cf77ac0378c1f90a9124fcbcb958d72151100c9"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn",
