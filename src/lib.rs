@@ -6,7 +6,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, Expr, ExprBinary, ExprField, ExprGroup, ExprIndex, ExprParen, ExprPath, ExprUnary, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
+use syn::{Attribute, Expr, ExprBinary, ExprField, ExprGroup, ExprIndex, ExprMethodCall, ExprParen, ExprPath, ExprUnary, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -329,6 +329,7 @@ fn rewrite_expr(
         Expr::Field(field) => rewrite_expr_field(field, base_name, replacement),
         Expr::Index(index) => rewrite_expr_index(index, base_name, replacement),
         Expr::Binary(binary) => rewrite_expr_binary(binary, base_name, replacement),
+        Expr::MethodCall(method_call) => rewrite_expr_method_call(method_call, base_name, replacement),
         Expr::Paren(paren) => rewrite_expr_paren(paren, base_name, replacement),
         Expr::Unary(unary) => rewrite_expr_unary(unary, base_name, replacement),
         Expr::Group(group) => rewrite_expr_group(group, base_name, replacement),
@@ -364,6 +365,23 @@ fn rewrite_expr_paren(
         attrs: paren.attrs.clone(),
         paren_token: paren.paren_token,
         expr: Box::new(expr),
+    }))
+}
+
+fn rewrite_expr_method_call(
+    method_call: &ExprMethodCall,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let receiver = rewrite_expr(&method_call.receiver, base_name, replacement)?;
+    Some(Expr::MethodCall(ExprMethodCall {
+        attrs: method_call.attrs.clone(),
+        receiver: Box::new(receiver),
+        dot_token: method_call.dot_token,
+        method: Ident::new(&method_call.method.to_string(), method_call.method.span()),
+        turbofish: method_call.turbofish.clone(),
+        paren_token: method_call.paren_token,
+        args: method_call.args.clone(),
     }))
 }
 
