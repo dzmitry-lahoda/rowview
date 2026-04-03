@@ -1,3 +1,4 @@
 //! Tests are docs.
-mod fin;
 mod basics;
+mod examples;
+mod advanced;

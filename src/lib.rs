@@ -1,11 +1,12 @@
 mod docs;
 
-use crate::docs::{AXIS_ATTR, FieldKind, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR, ROWS_SUFFIX};
+use crate::docs::{AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR, ROWS_SUFFIX};
+use heck::ToUpperCamelCase;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, Expr, ExprField, ExprIndex, ExprPath, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
+use syn::{Attribute, Expr, ExprBinary, ExprField, ExprGroup, ExprIndex, ExprParen, ExprPath, ExprUnary, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -106,6 +107,7 @@ impl Parse for RowsetSpec {
 
 struct FieldSpec {
     kind: FieldKind,
+    mode: FieldMode,
     name: Ident,
     ty: syn::Type,
     expr: Expr,
@@ -121,12 +123,18 @@ impl Parse for FieldSpec {
         input.parse::<Token![,]>()?;
 
         let mut kind = None;
+        let mut mode = FieldMode::Direct;
         let mut expr = None;
         let name_span = name.span();
         for attr in attrs {
             if attr.path().is_ident(FieldKind::Copy.as_str()) {
                 kind = Some(FieldKind::Copy);
-                expr = Some(attr.parse_args()?);
+                if let Ok(named) = attr.parse_args::<IncrementExpr>() {
+                    mode = FieldMode::Increment;
+                    expr = Some(named.expr);
+                } else {
+                    expr = Some(attr.parse_args()?);
+                }
             }
             if attr.path().is_ident(FieldKind::FromAxis.as_str()) {
                 kind = Some(FieldKind::FromAxis);
@@ -138,6 +146,7 @@ impl Parse for FieldSpec {
 
         Ok(Self {
             kind: kind.ok_or_else(|| syn::Error::new(name.span(), "missing field attribute"))?,
+            mode,
             name,
             ty,
             expr: expr.ok_or_else(|| syn::Error::new(name_span, "missing source expression"))?,
@@ -145,11 +154,29 @@ impl Parse for FieldSpec {
     }
 }
 
+struct IncrementExpr {
+    expr: Expr,
+}
+
+impl Parse for IncrementExpr {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let key: Ident = input.parse()?;
+        if key != FieldMode::Increment.as_str() {
+            return Err(syn::Error::new(
+                key.span(),
+                format!("expected `{}` = expr", FieldMode::Increment.as_str()),
+            ));
+        }
+        input.parse::<Token![=]>()?;
+        Ok(Self { expr: input.parse()? })
+    }
+}
+
 fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
     let root = args.root;
     let module_vis = module.vis;
     let module_name = module.name;
-    let rows_type = format_ident!("{}{ROWS_SUFFIX}", to_pascal_case(&module_name.to_string()));
+    let rows_type = format_ident!("{}{ROWS_SUFFIX}", module_name.to_string().to_upper_camel_case());
 
     let row_structs = module.rowsets.iter().map(|rowset| {
         let struct_name = &rowset.struct_name;
@@ -159,7 +186,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             quote! { pub #name: #ty }
         });
         quote! {
-            #[derive(Clone, Debug, PartialEq, Eq)]
+            #[derive(Clone, Debug, PartialEq)]
             pub struct #struct_name {
                 #( #field_defs, )*
             }
@@ -177,28 +204,64 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
         let axis = rewrite_source_expr(&rowset.axis, ROOT_ATTR, quote! { self });
         let struct_name = &rowset.struct_name;
         let qualified_struct_name = quote! { #module_name::#struct_name };
+        let increment_bindings = rowset.fields.iter().filter_map(|field| {
+            if !matches!(field.mode, FieldMode::Increment) {
+                return None;
+            }
+            let binding = format_ident!("{INCREMENT_BINDING_PREFIX}{}", field.name);
+            let value = rewrite_context_expr(
+                &field.expr,
+                &[
+                    (ROOT_ATTR, quote! { self }),
+                    (AXIS_ATTR, quote! { axis_item }),
+                ],
+            );
+            Some(quote! {
+                let mut #binding = #value;
+            })
+        });
         let field_inits = rowset.fields.iter().map(|field| {
             let name = &field.name;
-            let value = match field.kind {
-                FieldKind::Copy => rewrite_source_expr(&field.expr, ROOT_ATTR, quote! { self }),
-                FieldKind::FromAxis => rewrite_source_expr(&field.expr, AXIS_ATTR, quote! { axis_item }),
+            let value = match (&field.kind, &field.mode) {
+                (FieldKind::Copy, FieldMode::Direct) | (FieldKind::FromAxis, FieldMode::Direct) => rewrite_context_expr(
+                    &field.expr,
+                    &[
+                        (ROOT_ATTR, quote! { self }),
+                        (AXIS_ATTR, quote! { axis_item }),
+                    ],
+                ),
+                (FieldKind::Copy, FieldMode::Increment) => {
+                    let binding = format_ident!("{INCREMENT_BINDING_PREFIX}{}", field.name);
+                    quote! {{
+                        let value = #binding;
+                        #binding += 1;
+                        value
+                    }}
+                }
+                (FieldKind::FromAxis, FieldMode::Increment) => unreachable!(),
             };
             quote! { #name: #value }
         });
 
         let row_values = if matches!(&rowset.axis, Expr::Tuple(tuple) if tuple.elems.is_empty()) {
             quote! {
-                ::std::iter::once(#qualified_struct_name {
-                    #( #field_inits, )*
-                }).collect()
+                {
+                    #( #increment_bindings )*
+                    ::std::iter::once(#qualified_struct_name {
+                        #( #field_inits, )*
+                    }).collect()
+                }
             }
         } else {
             quote! {
-                (#axis).iter().map(|axis_item| {
-                    #qualified_struct_name {
-                        #( #field_inits, )*
-                    }
-                }).collect()
+                {
+                    #( #increment_bindings )*
+                    (#axis).iter().map(|axis_item| {
+                        #qualified_struct_name {
+                            #( #field_inits, )*
+                        }
+                    }).collect()
+                }
             }
         };
 
@@ -211,7 +274,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
         #module_vis mod #module_name {
             #( #row_structs )*
 
-            #[derive(Clone, Debug, PartialEq, Eq)]
+            #[derive(Clone, Debug, PartialEq)]
             pub struct #rows_type {
                 #( #rows_fields, )*
             }
@@ -227,36 +290,29 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
     }
 }
 
-fn to_pascal_case(name: &str) -> String {
-    let mut out = String::new();
-    let mut uppercase = true;
-    for ch in name.chars() {
-        if ch == '_' {
-            uppercase = true;
-            continue;
-        }
-        if uppercase {
-            for up in ch.to_uppercase() {
-                out.push(up);
-            }
-            uppercase = false;
-        } else {
-            out.push(ch);
-        }
-    }
-    if out.is_empty() {
-        ROWS_SUFFIX.to_string()
-    } else {
-        out
-    }
-}
-
 fn rewrite_source_expr(
     expr: &Expr,
     base_name: &str,
     replacement: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
-    if let Some(rewritten) = rewrite_expr(expr, base_name, &replacement) {
+    rewrite_context_expr(expr, &[(base_name, replacement)])
+}
+
+fn rewrite_context_expr(
+    expr: &Expr,
+    replacements: &[(&str, proc_macro2::TokenStream)],
+) -> proc_macro2::TokenStream {
+    let mut rewritten = expr.clone();
+    let mut changed = false;
+
+    for (base_name, replacement) in replacements {
+        if let Some(next) = rewrite_expr(&rewritten, base_name, replacement) {
+            rewritten = next;
+            changed = true;
+        }
+    }
+
+    if changed {
         quote! { #rewritten }
     } else {
         quote! { #expr }
@@ -272,8 +328,69 @@ fn rewrite_expr(
         Expr::Path(path) => rewrite_expr_path(path, base_name, replacement),
         Expr::Field(field) => rewrite_expr_field(field, base_name, replacement),
         Expr::Index(index) => rewrite_expr_index(index, base_name, replacement),
+        Expr::Binary(binary) => rewrite_expr_binary(binary, base_name, replacement),
+        Expr::Paren(paren) => rewrite_expr_paren(paren, base_name, replacement),
+        Expr::Unary(unary) => rewrite_expr_unary(unary, base_name, replacement),
+        Expr::Group(group) => rewrite_expr_group(group, base_name, replacement),
         _ => None,
     }
+}
+
+fn rewrite_expr_binary(
+    binary: &ExprBinary,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let left = rewrite_expr(&binary.left, base_name, replacement);
+    let right = rewrite_expr(&binary.right, base_name, replacement);
+    if left.is_none() && right.is_none() {
+        return None;
+    }
+    Some(Expr::Binary(ExprBinary {
+        attrs: binary.attrs.clone(),
+        left: Box::new(left.unwrap_or_else(|| (*binary.left).clone())),
+        op: binary.op.clone(),
+        right: Box::new(right.unwrap_or_else(|| (*binary.right).clone())),
+    }))
+}
+
+fn rewrite_expr_paren(
+    paren: &ExprParen,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let expr = rewrite_expr(&paren.expr, base_name, replacement)?;
+    Some(Expr::Paren(ExprParen {
+        attrs: paren.attrs.clone(),
+        paren_token: paren.paren_token,
+        expr: Box::new(expr),
+    }))
+}
+
+fn rewrite_expr_unary(
+    unary: &ExprUnary,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let expr = rewrite_expr(&unary.expr, base_name, replacement)?;
+    Some(Expr::Unary(ExprUnary {
+        attrs: unary.attrs.clone(),
+        op: unary.op.clone(),
+        expr: Box::new(expr),
+    }))
+}
+
+fn rewrite_expr_group(
+    group: &ExprGroup,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let expr = rewrite_expr(&group.expr, base_name, replacement)?;
+    Some(Expr::Group(ExprGroup {
+        attrs: group.attrs.clone(),
+        group_token: group.group_token,
+        expr: Box::new(expr),
+    }))
 }
 
 fn rewrite_expr_path(
