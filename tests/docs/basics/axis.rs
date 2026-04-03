@@ -1,0 +1,96 @@
+
+#[test]
+fn one() {
+    struct Root {
+        axis: Vec<(char, f32)>,
+    }
+
+    #[rowview::rows(root = Root)]
+    mod schema {
+        #[rowset(name = axis_one, axis = root.axis)]
+        struct OneRow {
+            #[from_axis(axis.0)]
+            id: char,
+            #[from_axis(axis.1)]
+            rest: f32,
+        }
+    }
+
+    let root = Root {
+        axis: vec![('a', 0.5), ('b', 111.111), ('c', 666.)],
+    };
+    let incremented_rows = root.to_rows().axis_one;
+
+    assert_eq!(incremented_rows.len(), 3);
+    assert_eq!(incremented_rows[0].id, 'a');
+    assert_eq!(incremented_rows[1].id, 'b');
+    assert_eq!(incremented_rows[2].id, 'c');
+    assert_eq!(incremented_rows[0].rest, 0.5);
+    assert_eq!(incremented_rows[1].rest, 111.111);
+    assert_eq!(incremented_rows[2].rest, 666.0);
+}
+
+
+/// 3 row sets from 3 separate axis
+#[test]
+fn three() {
+    struct Root {
+        letters: Vec<(char, f32)>,
+        numbers: Vec<(u32, bool)>,
+        words: Vec<(&'static str, i16)>,
+    }
+
+    #[rowview::rows(root = Root)]
+    mod schema {
+        #[rowset(name = letters, axis = root.letters)]
+        struct LetterRow {
+            #[from_axis(axis.0)]
+            id: char,
+            #[from_axis(axis.1)]
+            rest: f32,
+        }
+
+        #[rowset(name = numbers, axis = root.numbers)]
+        struct NumberRow {
+            #[from_axis(axis.0)]
+            id: u32,
+            #[from_axis(axis.1)]
+            active: bool,
+        }
+
+        #[rowset(name = words, axis = root.words)]
+        struct WordRow {
+            #[from_axis(axis.0)]
+            word: &'static str,
+            #[from_axis(axis.1)]
+            score: i16,
+        }
+    }
+
+    let root = Root {
+        letters: vec![('a', 0.5), ('b', 1.5)],
+        numbers: vec![(1, true), (2, false), (3, true)],
+        words: vec![("alpha", 10), ("beta", 20)],
+    };
+    let rows = root.to_rows();
+
+    assert_eq!(rows.letters.len(), 2);
+    assert_eq!(rows.letters[0].id, 'a');
+    assert_eq!(rows.letters[1].id, 'b');
+    assert_eq!(rows.letters[0].rest, 0.5);
+    assert_eq!(rows.letters[1].rest, 1.5);
+
+    assert_eq!(rows.numbers.len(), 3);
+    assert_eq!(rows.numbers[0].id, 1);
+    assert_eq!(rows.numbers[1].id, 2);
+    assert_eq!(rows.numbers[2].id, 3);
+    assert!(rows.numbers[0].active);
+    assert!(!rows.numbers[1].active);
+    assert!(rows.numbers[2].active);
+
+    assert_eq!(rows.words.len(), 2);
+    assert_eq!(rows.words[0].word, "alpha");
+    assert_eq!(rows.words[1].word, "beta");
+    assert_eq!(rows.words[0].score, 10);
+    assert_eq!(rows.words[1].score, 20);
+}
