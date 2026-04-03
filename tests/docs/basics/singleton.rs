@@ -29,19 +29,17 @@ fn singleton() {
 #[test]
 fn deep_gleton() {
     #[subdef]
-    struct D {
-        e: u8,
-    }
-
-    #[subdef]
-    struct C {
-        d: D,
-    }
-
-    #[subdef]
     struct Singleton {
         b: u32,
-        c: C,
+        c: [_; {
+            struct C {
+                d: [_; {
+                    struct D {
+                        e: u8,
+                    }
+                }],
+            }
+        }],
     }
 
     #[rowview::rows(root = Singleton)]
@@ -58,7 +56,9 @@ fn deep_gleton() {
     let singleton = Singleton {
         b: 42,
         c: C {
-            d: D { e: 33 },
+            d: D {
+                e: 33,
+            },
         },
     };
     let rows = singleton.to_rows().abs;

@@ -1,0 +1,1 @@
+//! Allows to convert nested value to other row value, conversion must be bijective, otherwise it panics.
