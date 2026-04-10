@@ -1,37 +1,41 @@
 //! Specializaton of mattched Rust expression patters.
 //! Form pure Rust based eDSL. Per se active docs for all possible features.
 
-struct RowsArgs {
-    root: Ident,
+use crate::docs::{FieldKind, FieldMode};
+use syn::{Attribute, Expr, Ident, ItemUse, Member, Visibility};
+
+pub(super) struct RowsArgs {
+    pub(super) root: Ident,
 }
 
-struct RowsModule {
-    vis: Visibility,
-    name: Ident,
-    imports: Vec<ItemUse>,
-    rowsets: Vec<RowsetSpec>,
+pub(super) struct RowsModule {
+    pub(super) vis: Visibility,
+    pub(super) name: Ident,
+    pub(super) imports: Vec<ItemUse>,
+    pub(super) rowsets: Vec<RowsetSpec>,
 }
 
-struct RowsetSpec {
-    rowset_name: Ident,
-    axis: Expr,
-    struct_name: Ident,
-    fields: Vec<FieldSpec>,
+pub(super) struct RowsetSpec {
+    pub(super) attrs: Vec<Attribute>,
+    pub(super) rowset_name: Ident,
+    pub(super) axis: Expr,
+    pub(super) struct_name: Ident,
+    pub(super) fields: Vec<FieldSpec>,
 }
 
-struct FieldSpec {
-    kind: FieldKind,
-    mode: FieldMode,
-    name: Ident,
-    ty: syn::Type,
-    expr: Expr,
+pub(super) struct FieldSpec {
+    pub(super) kind: FieldKind,
+    pub(super) mode: FieldMode,
+    pub(super) name: Ident,
+    pub(super) ty: syn::Type,
+    pub(super) expr: Expr,
 }
 
-struct IncrementExpr {
-    expr: Expr,
+pub(super) struct IncrementExpr {
+    pub(super) expr: Expr,
 }
 
-struct NestedAxisSpec {
-    parent: Expr,
-    child: Member,
+pub(super) struct NestedAxisSpec {
+    pub(super) parent: Expr,
+    pub(super) child: Member,
 }

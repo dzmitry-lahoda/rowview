@@ -1,13 +1,14 @@
 mod docs;
-pub mod patterns;
+mod patterns;
 
 use crate::docs::{AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR, ROWS_SUFFIX};
+use crate::patterns::{FieldSpec, IncrementExpr, NestedAxisSpec, RowsArgs, RowsModule, RowsetSpec};
 use heck::ToUpperCamelCase;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Expr, ExprBinary, ExprCall, ExprField, ExprGroup, ExprIndex, ExprMethodCall, ExprParen, ExprPath, ExprReference, ExprUnary, Ident, Item, ItemStruct, ItemUse, Member, Result, Token, Visibility, braced, parse_macro_input};
+use syn::{Expr, ExprBinary, ExprCall, ExprField, ExprGroup, ExprIndex, ExprMethodCall, ExprParen, ExprPath, ExprReference, ExprUnary, Ident, Item, ItemStruct, Member, Result, Token, braced, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -105,6 +106,7 @@ impl RowsetSpec {
 
         let mut rowset_name = None;
         let mut axis = None;
+        let mut row_attrs = Vec::new();
         for attr in attrs {
             if attr.path().is_ident(ROWSET_ATTR) {
                 attr.parse_nested_meta(|meta| {
@@ -118,10 +120,13 @@ impl RowsetSpec {
                     }
                     Err(meta.error("unsupported rowset attribute"))
                 })?;
+            } else {
+                row_attrs.push(attr);
             }
         }
 
         Ok(Self {
+            attrs: row_attrs,
             rowset_name: rowset_name
                 .ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${NAME_ATTR}`"))?,
             axis: axis.ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${AXIS_ATTR}`"))?,
@@ -154,6 +159,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
     let rows_type = format_ident!("{}{ROWS_SUFFIX}", module_name.to_string().to_upper_camel_case());
 
     let row_structs = module.rowsets.iter().map(|rowset| {
+        let attrs = &rowset.attrs;
         let struct_name = &rowset.struct_name;
         let field_defs = rowset.fields.iter().map(|field| {
             let name = &field.name;
@@ -161,6 +167,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             quote! { pub #name: #ty }
         });
         quote! {
+            #( #attrs )*
             #[derive(Clone, Debug, PartialEq)]
             pub struct #struct_name {
                 #( #field_defs, )*

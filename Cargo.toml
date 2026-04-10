@@ -15,4 +15,5 @@ strum = { version = "*", features = ["derive"] }
 # manyhow?
 
 [dev-dependencies]
+serde = { version = "1", features = ["derive"] }
 subdef ={ version = "*" }
