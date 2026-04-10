@@ -6,7 +6,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, Expr, ExprBinary, ExprField, ExprGroup, ExprIndex, ExprMethodCall, ExprParen, ExprPath, ExprUnary, Ident, Member, Result, Token, Visibility, braced, parse_macro_input};
+use syn::{Expr, ExprBinary, ExprCall, ExprField, ExprGroup, ExprIndex, ExprMethodCall, ExprParen, ExprPath, ExprReference, ExprUnary, Ident, Item, ItemStruct, ItemUse, Member, Result, Token, Visibility, braced, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -36,6 +36,7 @@ impl Parse for RowsArgs {
 struct RowsModule {
     vis: Visibility,
     name: Ident,
+    imports: Vec<ItemUse>,
     rowsets: Vec<RowsetSpec>,
 }
 
@@ -47,12 +48,22 @@ impl Parse for RowsModule {
         let content;
         braced!(content in input);
 
+        let mut imports = Vec::new();
         let mut rowsets = Vec::new();
         while !content.is_empty() {
-            rowsets.push(content.parse()?);
+            match content.parse::<Item>()? {
+                Item::Use(item_use) => imports.push(item_use),
+                Item::Struct(item_struct) => rowsets.push(RowsetSpec::from_item_struct(item_struct)?),
+                item => return Err(syn::Error::new_spanned(item, "expected `use` or `struct` item")),
+            }
         }
 
-        Ok(Self { vis, name, rowsets })
+        Ok(Self {
+            vis,
+            name,
+            imports,
+            rowsets,
+        })
     }
 }
 
@@ -63,17 +74,45 @@ struct RowsetSpec {
     fields: Vec<FieldSpec>,
 }
 
-impl Parse for RowsetSpec {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        let attrs = input.call(Attribute::parse_outer)?;
-        input.parse::<Token![struct]>()?;
-        let struct_name: Ident = input.parse()?;
-        let fields_content;
-        braced!(fields_content in input);
-
+impl RowsetSpec {
+    fn from_item_struct(item_struct: ItemStruct) -> Result<Self> {
+        let attrs = item_struct.attrs;
+        let struct_name = item_struct.ident;
         let mut fields = Vec::new();
-        while !fields_content.is_empty() {
-            fields.push(fields_content.parse()?);
+        for field in item_struct.fields {
+            let name = field
+                .ident
+                .ok_or_else(|| syn::Error::new(struct_name.span(), "expected named field"))?;
+            let ty = field.ty;
+            let attrs = field.attrs;
+            let name_span = name.span();
+
+            let mut kind = None;
+            let mut mode = FieldMode::Direct;
+            let mut expr = None;
+            for attr in attrs {
+                if attr.path().is_ident(FieldKind::Copy.as_str()) {
+                    kind = Some(FieldKind::Copy);
+                    if let Ok(named) = attr.parse_args::<IncrementExpr>() {
+                        mode = FieldMode::Increment;
+                        expr = Some(named.expr);
+                    } else {
+                        expr = Some(attr.parse_args()?);
+                    }
+                }
+                if attr.path().is_ident(FieldKind::FromAxis.as_str()) {
+                    kind = Some(FieldKind::FromAxis);
+                    expr = Some(attr.parse_args()?);
+                }
+            }
+
+            fields.push(FieldSpec {
+                kind: kind.ok_or_else(|| syn::Error::new(name.span(), "missing field attribute"))?,
+                mode,
+                name,
+                ty,
+                expr: expr.ok_or_else(|| syn::Error::new(name_span, "missing source expression"))?,
+            });
         }
 
         let mut rowset_name = None;
@@ -104,54 +143,12 @@ impl Parse for RowsetSpec {
     }
 }
 
-
 struct FieldSpec {
     kind: FieldKind,
     mode: FieldMode,
     name: Ident,
     ty: syn::Type,
     expr: Expr,
-}
-
-impl Parse for FieldSpec {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        let attrs = input.call(Attribute::parse_outer)?;
-        let name: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
-
-        let ty: syn::Type = input.parse()?;
-        input.parse::<Token![,]>()?;
-
-        let mut kind = None;
-        let mut mode = FieldMode::Direct;
-        let mut expr = None;
-        let name_span = name.span();
-        for attr in attrs {
-            if attr.path().is_ident(FieldKind::Copy.as_str()) {
-                kind = Some(FieldKind::Copy);
-                if let Ok(named) = attr.parse_args::<IncrementExpr>() {
-                    mode = FieldMode::Increment;
-                    expr = Some(named.expr);
-                } else {
-                    expr = Some(attr.parse_args()?);
-                }
-            }
-            if attr.path().is_ident(FieldKind::FromAxis.as_str()) {
-                kind = Some(FieldKind::FromAxis);
-                expr = Some(attr.parse_args()?);
-            }
-        }
-
-        let _ = ty;
-
-        Ok(Self {
-            kind: kind.ok_or_else(|| syn::Error::new(name.span(), "missing field attribute"))?,
-            mode,
-            name,
-            ty,
-            expr: expr.ok_or_else(|| syn::Error::new(name_span, "missing source expression"))?,
-        })
-    }
 }
 
 struct IncrementExpr {
@@ -176,6 +173,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
     let root = args.root;
     let module_vis = module.vis;
     let module_name = module.name;
+    let module_imports = module.imports;
     let rows_type = format_ident!("{}{ROWS_SUFFIX}", module_name.to_string().to_upper_camel_case());
 
     let row_structs = module.rowsets.iter().map(|rowset| {
@@ -272,6 +270,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
 
     quote! {
         #module_vis mod #module_name {
+            #( #module_imports )*
             #( #row_structs )*
 
             #[derive(Clone, Debug, PartialEq)]
@@ -329,8 +328,10 @@ fn rewrite_expr(
         Expr::Field(field) => rewrite_expr_field(field, base_name, replacement),
         Expr::Index(index) => rewrite_expr_index(index, base_name, replacement),
         Expr::Binary(binary) => rewrite_expr_binary(binary, base_name, replacement),
+        Expr::Call(call) => rewrite_expr_call(call, base_name, replacement),
         Expr::MethodCall(method_call) => rewrite_expr_method_call(method_call, base_name, replacement),
         Expr::Paren(paren) => rewrite_expr_paren(paren, base_name, replacement),
+        Expr::Reference(reference) => rewrite_expr_reference(reference, base_name, replacement),
         Expr::Unary(unary) => rewrite_expr_unary(unary, base_name, replacement),
         Expr::Group(group) => rewrite_expr_group(group, base_name, replacement),
         _ => None,
@@ -350,7 +351,7 @@ fn rewrite_expr_binary(
     Some(Expr::Binary(ExprBinary {
         attrs: binary.attrs.clone(),
         left: Box::new(left.unwrap_or_else(|| (*binary.left).clone())),
-        op: binary.op.clone(),
+        op: binary.op,
         right: Box::new(right.unwrap_or_else(|| (*binary.right).clone())),
     }))
 }
@@ -373,15 +374,55 @@ fn rewrite_expr_method_call(
     base_name: &str,
     replacement: &proc_macro2::TokenStream,
 ) -> Option<Expr> {
-    let receiver = rewrite_expr(&method_call.receiver, base_name, replacement)?;
+    let receiver = rewrite_expr(&method_call.receiver, base_name, replacement);
+    let mut changed = receiver.is_some();
+    let args = method_call
+        .args
+        .iter()
+        .map(|arg| {
+            let next = rewrite_expr(arg, base_name, replacement);
+            changed |= next.is_some();
+            next.unwrap_or_else(|| arg.clone())
+        })
+        .collect();
+    if !changed {
+        return None;
+    }
     Some(Expr::MethodCall(ExprMethodCall {
         attrs: method_call.attrs.clone(),
-        receiver: Box::new(receiver),
+        receiver: Box::new(receiver.unwrap_or_else(|| (*method_call.receiver).clone())),
         dot_token: method_call.dot_token,
         method: Ident::new(&method_call.method.to_string(), method_call.method.span()),
         turbofish: method_call.turbofish.clone(),
         paren_token: method_call.paren_token,
-        args: method_call.args.clone(),
+        args,
+    }))
+}
+
+fn rewrite_expr_call(
+    call: &ExprCall,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let func = rewrite_expr(&call.func, base_name, replacement);
+    let mut changed = func.is_some();
+    let args = call
+        .args
+        .iter()
+        .map(|arg| {
+            let next = rewrite_expr(arg, base_name, replacement);
+            changed |= next.is_some();
+            next.unwrap_or_else(|| arg.clone())
+        })
+        .collect();
+    if !changed {
+        return None;
+    }
+    Some(Expr::Call(ExprCall {
+        attrs: call.attrs.clone(),
+        func: Box::new(func.unwrap_or_else(|| (*call.func).clone())),
+        paren_token: call.paren_token,
+        args,
     }))
 }
 
@@ -393,7 +434,21 @@ fn rewrite_expr_unary(
     let expr = rewrite_expr(&unary.expr, base_name, replacement)?;
     Some(Expr::Unary(ExprUnary {
         attrs: unary.attrs.clone(),
-        op: unary.op.clone(),
+        op: unary.op,
+        expr: Box::new(expr),
+    }))
+}
+
+fn rewrite_expr_reference(
+    reference: &ExprReference,
+    base_name: &str,
+    replacement: &proc_macro2::TokenStream,
+) -> Option<Expr> {
+    let expr = rewrite_expr(&reference.expr, base_name, replacement)?;
+    Some(Expr::Reference(ExprReference {
+        attrs: reference.attrs.clone(),
+        and_token: reference.and_token,
+        mutability: reference.mutability,
         expr: Box::new(expr),
     }))
 }
@@ -457,5 +512,45 @@ fn clone_member(member: &Member) -> Member {
             index: index.index,
             span: Span::call_site(),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    #[test]
+    fn generated_code_never_calls_clone_on_inputs() {
+        let args: RowsArgs = syn::parse2(quote!(root = Root)).expect("valid rows args");
+        let module: RowsModule = syn::parse2(quote! {
+            mod schema {
+                #[rowset(name = root_rows, axis = ())]
+                struct RootRow {
+                    #[copy(root.meta.0)]
+                    root_id: u32,
+                }
+
+                #[rowset(name = axis_rows, axis = root.axis)]
+                struct AxisRow {
+                    #[copy(root.meta.0)]
+                    root_id: u32,
+                    #[from_axis(axis.0)]
+                    axis_id: u32,
+                }
+            }
+        })
+        .expect("valid rows module");
+
+        let generated = expand_rows(args, module).to_string();
+
+        assert!(
+            !generated.contains(".clone"),
+            "generated code unexpectedly contains method clone call: {generated}"
+        );
+        assert!(
+            !generated.contains("Clone :: clone"),
+            "generated code unexpectedly contains Clone::clone call: {generated}"
+        );
     }
 }

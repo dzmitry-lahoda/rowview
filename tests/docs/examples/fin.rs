@@ -1,4 +1,6 @@
 
+#![allow(dead_code)]
+
 use std::num::NonZero;
 
 type AccountId = u32;

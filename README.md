@@ -26,8 +26,9 @@
   - update forms aware like `Option<Option<T>>` or `Option<T>` or `Either<T, ()>`  or `Either<T,T>` , where T may or may be Default. 
   - delta(aggeregatable) or final value aware (last written is correct)
 
-# Limitations
+# Constraaints and limitations
 
+- Does not `Clone` input structures.
 - Supports conversion of data from trusted source only.
 - Keys must be `Copy`
 
