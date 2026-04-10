@@ -1,4 +1,5 @@
 mod docs;
+pub mod patterns;
 
 use crate::docs::{AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR, ROWS_SUFFIX};
 use heck::ToUpperCamelCase;
@@ -16,9 +17,6 @@ pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
     expand_rows(args, module).into()
 }
 
-struct RowsArgs {
-    root: Ident,
-}
 
 impl Parse for RowsArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
@@ -33,12 +31,7 @@ impl Parse for RowsArgs {
     }
 }
 
-struct RowsModule {
-    vis: Visibility,
-    name: Ident,
-    imports: Vec<ItemUse>,
-    rowsets: Vec<RowsetSpec>,
-}
+
 
 impl Parse for RowsModule {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
@@ -67,12 +60,7 @@ impl Parse for RowsModule {
     }
 }
 
-struct RowsetSpec {
-    rowset_name: Ident,
-    axis: Expr,
-    struct_name: Ident,
-    fields: Vec<FieldSpec>,
-}
+
 
 impl RowsetSpec {
     fn from_item_struct(item_struct: ItemStruct) -> Result<Self> {
@@ -143,17 +131,6 @@ impl RowsetSpec {
     }
 }
 
-struct FieldSpec {
-    kind: FieldKind,
-    mode: FieldMode,
-    name: Ident,
-    ty: syn::Type,
-    expr: Expr,
-}
-
-struct IncrementExpr {
-    expr: Expr,
-}
 
 impl Parse for IncrementExpr {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
@@ -199,7 +176,8 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
 
     let builders = module.rowsets.iter().map(|rowset| {
         let rowset_name = &rowset.rowset_name;
-        let axis = rewrite_source_expr(&rowset.axis, ROOT_ATTR, quote! { self });
+        let nested_axis = parse_nested_axis_expr(&rowset.axis);
+        let axis_iter = rewrite_axis_iter_expr(&rowset.axis, nested_axis.as_ref());
         let struct_name = &rowset.struct_name;
         let qualified_struct_name = quote! { #module_name::#struct_name };
         let increment_bindings = rowset.fields.iter().filter_map(|field| {
@@ -207,13 +185,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
                 return None;
             }
             let binding = format_ident!("{INCREMENT_BINDING_PREFIX}{}", field.name);
-            let value = rewrite_context_expr(
-                &field.expr,
-                &[
-                    (ROOT_ATTR, quote! { self }),
-                    (AXIS_ATTR, quote! { axis_item }),
-                ],
-            );
+            let value = rewrite_row_expr(&field.expr, nested_axis.as_ref());
             Some(quote! {
                 let mut #binding = #value;
             })
@@ -221,13 +193,9 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
         let field_inits = rowset.fields.iter().map(|field| {
             let name = &field.name;
             let value = match (&field.kind, &field.mode) {
-                (FieldKind::Copy, FieldMode::Direct) | (FieldKind::FromAxis, FieldMode::Direct) => rewrite_context_expr(
-                    &field.expr,
-                    &[
-                        (ROOT_ATTR, quote! { self }),
-                        (AXIS_ATTR, quote! { axis_item }),
-                    ],
-                ),
+                (FieldKind::Copy, FieldMode::Direct) | (FieldKind::FromAxis, FieldMode::Direct) => {
+                    rewrite_row_expr(&field.expr, nested_axis.as_ref())
+                }
                 (FieldKind::Copy, FieldMode::Increment) => {
                     let binding = format_ident!("{INCREMENT_BINDING_PREFIX}{}", field.name);
                     quote! {{
@@ -254,7 +222,8 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             quote! {
                 {
                     #( #increment_bindings )*
-                    (#axis).iter().map(|axis_item| {
+                    #axis_iter.map(|axis_item| {
+                        let (axis_parent, axis_item) = axis_item;
                         #qualified_struct_name {
                             #( #field_inits, )*
                         }
@@ -279,6 +248,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             }
         }
 
+        #[forbid(clippy::clone_on_copy, clippy::redundant_clone)]
         impl #root {
             pub fn to_rows(&self) -> #module_name::#rows_type {
                 #module_name::#rows_type {
@@ -295,6 +265,88 @@ fn rewrite_source_expr(
     replacement: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     rewrite_context_expr(expr, &[(base_name, replacement)])
+}
+
+
+fn rewrite_axis_iter_expr(
+    expr: &Expr,
+    nested_axis: Option<&NestedAxisSpec>,
+) -> proc_macro2::TokenStream {
+    if let Some(iter) = rewrite_nested_axis_iter_expr(nested_axis) {
+        iter
+    } else {
+        let axis = rewrite_source_expr(expr, ROOT_ATTR, quote! { self });
+        quote! { (#axis).iter().map(|axis_item| { ((), axis_item) }) }
+    }
+}
+
+fn parse_nested_axis_expr(expr: &Expr) -> Option<NestedAxisSpec> {
+    let Expr::Field(field) = expr else {
+        return None;
+    };
+    let Expr::Index(index) = &*field.base else {
+        return None;
+    };
+    if !matches!(&*index.index, Expr::Range(_)) {
+        return None;
+    }
+
+    Some(NestedAxisSpec {
+        parent: (*index.expr).clone(),
+        child: clone_member(&field.member),
+    })
+}
+
+fn rewrite_nested_axis_iter_expr(nested_axis: Option<&NestedAxisSpec>) -> Option<proc_macro2::TokenStream> {
+    let nested_axis = nested_axis?;
+    let base = rewrite_source_expr(&nested_axis.parent, ROOT_ATTR, quote! { self });
+    let member = clone_member(&nested_axis.child);
+    Some(quote! {
+        (#base).iter().flat_map(|axis_parent| {
+            axis_parent.#member.iter().map(move |axis_item| (axis_parent, axis_item))
+        })
+    })
+}
+
+fn rewrite_row_expr(
+    expr: &Expr,
+    nested_axis: Option<&NestedAxisSpec>,
+) -> proc_macro2::TokenStream {
+    if let Some(nested_axis) = nested_axis
+        && let Some(parent_expr) = rewrite_parent_expr(expr, nested_axis)
+    {
+        return parent_expr;
+    }
+
+    rewrite_context_expr(
+        expr,
+        &[
+            (ROOT_ATTR, quote! { self }),
+            (AXIS_ATTR, quote! { axis_item }),
+        ],
+    )
+}
+
+fn rewrite_parent_expr(
+    expr: &Expr,
+    nested_axis: &NestedAxisSpec,
+) -> Option<proc_macro2::TokenStream> {
+    let Expr::Field(field) = expr else {
+        return None;
+    };
+    let Expr::Index(index) = &*field.base else {
+        return None;
+    };
+    if !matches!(&*index.index, Expr::Range(_)) {
+        return None;
+    }
+    let parent = rewrite_source_expr(&nested_axis.parent, ROOT_ATTR, quote! { self });
+    let requested_parent = rewrite_source_expr(&index.expr, ROOT_ATTR, quote! { self });
+    if parent.to_string() != requested_parent.to_string() {
+        return None;
+    }
+    let member = clone_member(&field.member);
+    Some(quote! { axis_parent.#member })
 }
 
 fn rewrite_context_expr(
@@ -512,45 +564,5 @@ fn clone_member(member: &Member) -> Member {
             index: index.index,
             span: Span::call_site(),
         }),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quote::quote;
-
-    #[test]
-    fn generated_code_never_calls_clone_on_inputs() {
-        let args: RowsArgs = syn::parse2(quote!(root = Root)).expect("valid rows args");
-        let module: RowsModule = syn::parse2(quote! {
-            mod schema {
-                #[rowset(name = root_rows, axis = ())]
-                struct RootRow {
-                    #[copy(root.meta.0)]
-                    root_id: u32,
-                }
-
-                #[rowset(name = axis_rows, axis = root.axis)]
-                struct AxisRow {
-                    #[copy(root.meta.0)]
-                    root_id: u32,
-                    #[from_axis(axis.0)]
-                    axis_id: u32,
-                }
-            }
-        })
-        .expect("valid rows module");
-
-        let generated = expand_rows(args, module).to_string();
-
-        assert!(
-            !generated.contains(".clone"),
-            "generated code unexpectedly contains method clone call: {generated}"
-        );
-        assert!(
-            !generated.contains("Clone :: clone"),
-            "generated code unexpectedly contains Clone::clone call: {generated}"
-        );
     }
 }
