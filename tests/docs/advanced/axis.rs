@@ -1,1 +1,1 @@
-//! double depth axis
+//! Double depth axis, custom collections.

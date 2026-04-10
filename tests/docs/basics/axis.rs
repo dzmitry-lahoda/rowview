@@ -1,3 +1,4 @@
+use std::collections::{BTreeSet, HashSet};
 
 #[test]
 fn one() {
@@ -28,6 +29,67 @@ fn one() {
     assert_eq!(incremented_rows[0].rest, 0.5);
     assert_eq!(incremented_rows[1].rest, 111.111);
     assert_eq!(incremented_rows[2].rest, 666.0);
+}
+
+#[test]
+fn hash_set() {
+    struct Root {
+        axis: HashSet<(u32, u32)>,
+    }
+
+    #[rowview::rows(root = Root)]
+    mod schema {
+        #[rowset(name = axis_rows, axis = root.axis)]
+        struct AxisRow {
+            #[from_axis(axis.0)]
+            id: u32,
+            #[from_axis(axis.1)]
+            value: u32,
+        }
+    }
+
+    let root = Root {
+        axis: HashSet::from([(1, 10), (2, 20), (3, 30)]),
+    };
+    let rows = root.to_rows().axis_rows;
+
+    assert_eq!(rows.len(), 3);
+
+    let mut pairs: Vec<_> = rows.into_iter().map(|row| (row.id, row.value)).collect();
+    pairs.sort_unstable();
+
+    assert_eq!(pairs, vec![(1, 10), (2, 20), (3, 30)]);
+}
+
+#[test]
+fn btree_set() {
+    struct Root {
+        axis: BTreeSet<(u32, u32)>,
+    }
+
+    #[rowview::rows(root = Root)]
+    mod schema {
+        #[rowset(name = axis_rows, axis = root.axis)]
+        struct AxisRow {
+            #[from_axis(axis.0)]
+            id: u32,
+            #[from_axis(axis.1)]
+            value: u32,
+        }
+    }
+
+    let root = Root {
+        axis: BTreeSet::from([(3, 30), (1, 10), (2, 20)]),
+    };
+    let rows = root.to_rows().axis_rows;
+
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0].id, 1);
+    assert_eq!(rows[0].value, 10);
+    assert_eq!(rows[1].id, 2);
+    assert_eq!(rows[1].value, 20);
+    assert_eq!(rows[2].id, 3);
+    assert_eq!(rows[2].value, 30);
 }
 
 
