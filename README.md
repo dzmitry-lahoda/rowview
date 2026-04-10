@@ -39,4 +39,11 @@ Macro is:
 - Rust syntax in attributed for deep integration with language and no need to lear new syntax
 - compile time typed
 
+
 Fails fast panic is preffered to return error.
+Avods using closures as they are not declarative per se.
+
+# Perfomance
+
+Need decide if builds maps/sets for joins or not. I did not do it yet.
+Need feed some join optimization article.

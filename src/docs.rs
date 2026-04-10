@@ -13,6 +13,8 @@ pub enum FieldKind {
     Copy,
     FromAxis,
     FromIndex,
+    Join,
+    Select,
 }
 
 impl FieldKind {

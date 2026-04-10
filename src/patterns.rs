@@ -17,6 +17,7 @@ pub(super) struct RowsModule {
 
 pub(super) struct RowsetSpec {
     pub(super) attrs: Vec<Attribute>,
+    pub(super) joins: Vec<JoinOptionSpec>,
     pub(super) rowset_name: Ident,
     pub(super) axis: Expr,
     pub(super) struct_name: Ident,
@@ -29,10 +30,18 @@ pub(super) struct FieldSpec {
     pub(super) name: Ident,
     pub(super) ty: syn::Type,
     pub(super) expr: Expr,
+    pub(super) join: Option<JoinOptionSpec>,
 }
 
 pub(super) struct IncrementExpr {
     pub(super) expr: Expr,
+}
+
+pub(super) struct JoinOptionSpec {
+    pub(super) source: Option<Expr>,
+    pub(super) alias: Option<Ident>,
+    pub(super) condition: Expr,
+    pub(super) value: Option<Expr>,
 }
 
 pub(super) struct NestedAxisSpec {
