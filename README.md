@@ -32,9 +32,11 @@
 - Supports conversion of data from trusted source only.
 - Keys must be `Copy`
 
-# Guideliens
+# Guidelines and opinionations
 
 Macro is:
 - token based, not string based
 - Rust syntax in attributed for deep integration with language and no need to lear new syntax
 - compile time typed
+
+Fails fast panic is preffered to return error.

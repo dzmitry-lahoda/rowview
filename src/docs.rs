@@ -12,6 +12,7 @@ pub enum FieldKind {
     /// Repeated context
     Copy,
     FromAxis,
+    FromIndex,
 }
 
 impl FieldKind {

@@ -93,6 +93,10 @@ impl RowsetSpec {
                     kind = Some(FieldKind::FromAxis);
                     expr = Some(attr.parse_args()?);
                 }
+                if attr.path().is_ident(FieldKind::FromIndex.as_str()) {
+                    kind = Some(FieldKind::FromIndex);
+                    expr = Some(attr.parse_args()?);
+                }
             }
 
             fields.push(FieldSpec {
@@ -203,6 +207,13 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
                 (FieldKind::Copy, FieldMode::Direct) | (FieldKind::FromAxis, FieldMode::Direct) => {
                     rewrite_row_expr(&field.expr, nested_axis.as_ref())
                 }
+                (FieldKind::FromIndex, FieldMode::Direct) => {
+                    quote! {
+                        axis_index
+                            .try_into()
+                            .expect("rowview axis index exceeds target field type capacity")
+                    }
+                }
                 (FieldKind::Copy, FieldMode::Increment) => {
                     let binding = format_ident!("{INCREMENT_BINDING_PREFIX}{}", field.name);
                     quote! {{
@@ -211,7 +222,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
                         value
                     }}
                 }
-                (FieldKind::FromAxis, FieldMode::Increment) => unreachable!(),
+                (FieldKind::FromAxis | FieldKind::FromIndex, FieldMode::Increment) => unreachable!(),
             };
             quote! { #name: #value }
         });
@@ -229,7 +240,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             quote! {
                 {
                     #( #increment_bindings )*
-                    #axis_iter.map(|axis_item| {
+                    #axis_iter.enumerate().map(|(axis_index, axis_item)| {
                         let (axis_parent, axis_item) = axis_item;
                         #qualified_struct_name {
                             #( #field_inits, )*
@@ -255,7 +266,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> proc_macro2::TokenStream {
             }
         }
 
-        #[forbid(clippy::clone_on_copy, clippy::redundant_clone)]
+        #[forbid(clippy::clone_on_copy, clippy::redundant_clone, clippy::unwrap_used)]
         impl #root {
             pub fn to_rows(&self) -> #module_name::#rows_type {
                 #module_name::#rows_type {

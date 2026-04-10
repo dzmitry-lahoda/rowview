@@ -1,7 +1,5 @@
 //! Allows to join by key
 
-
-
 #[test]
 fn vec_tuple_vec_tuple_into_option() {
 

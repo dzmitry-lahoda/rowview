@@ -156,3 +156,37 @@ fn three() {
     assert_eq!(rows.words[0].score, 10);
     assert_eq!(rows.words[1].score, 20);
 }
+
+
+#[test]
+fn axis_element_position_value() {
+    struct EnumeratedRoot {
+        axis: Vec<(char, f32)>,
+    }
+
+    #[rowview::rows(root = EnumeratedRoot)]
+    mod schema {
+        #[rowset(name = axis_one, axis = root.axis)]
+        struct OneRow {
+            #[from_index(axis)]
+            index: usize,
+            #[from_index(axis)]
+            index_capped: u32,
+            #[from_axis(axis.1)]
+            rest: f32,
+        }
+    }
+
+    let rows = EnumeratedRoot {
+        axis: vec![('a', 0.5), ('b', 111.111), ('c', 666.)],
+    }
+    .to_rows();
+
+    assert_eq!(rows.axis_one.len(), 3);
+    assert_eq!(rows.axis_one[0].index, 0);
+    assert_eq!(rows.axis_one[1].index, 1);
+    assert_eq!(rows.axis_one[2].index, 2);
+    assert_eq!(rows.axis_one[0].index_capped, 0);
+    assert_eq!(rows.axis_one[1].index_capped, 1);
+    assert_eq!(rows.axis_one[2].index_capped, 2);
+}
