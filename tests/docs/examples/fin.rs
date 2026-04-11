@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 
 use std::num::NonZero;
@@ -88,7 +87,8 @@ fn all() {
             is_reduce_only: false,
             price: 666_u64,
             size: x.1.1,
-        }).collect();
+        })
+        .collect();
     let receipt = TradeOrPlace {
         trade_id_base: 42,
         taker: Taker {

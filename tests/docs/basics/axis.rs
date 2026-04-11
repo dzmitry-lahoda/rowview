@@ -92,7 +92,6 @@ fn btree_set() {
     assert_eq!(rows[2].value, 30);
 }
 
-
 /// 3 row sets from 3 separate axis
 #[test]
 fn three() {
@@ -156,7 +155,6 @@ fn three() {
     assert_eq!(rows.words[0].score, 10);
     assert_eq!(rows.words[1].score, 20);
 }
-
 
 #[test]
 fn axis_element_position_value() {

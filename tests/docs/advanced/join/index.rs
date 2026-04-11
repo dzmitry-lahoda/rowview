@@ -1,6 +1,5 @@
 //! So we join by location in array, assuming both collection are ordered.
-//! Only inner
-
+//! Only inner zip.
 
 #[test]
 fn index_success() {
@@ -43,7 +42,9 @@ fn index_success() {
 }
 
 #[test]
-#[should_panic(expected = "rowview index join requires axis and joined collection lengths to match")]
+#[should_panic(
+    expected = "rowview index join requires axis and joined collection lengths to match"
+)]
 fn index_panics_when_joined_len_is_shorter() {
     struct Root {
         axis: Vec<(u32, u8)>,
@@ -71,7 +72,9 @@ fn index_panics_when_joined_len_is_shorter() {
 }
 
 #[test]
-#[should_panic(expected = "rowview index join requires axis and joined collection lengths to match")]
+#[should_panic(
+    expected = "rowview index join requires axis and joined collection lengths to match"
+)]
 fn index_panics_when_joined_len_is_longer() {
     struct Root {
         axis: Vec<(u32, u8)>,

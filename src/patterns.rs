@@ -42,6 +42,8 @@ pub(super) struct JoinOptionSpec {
     pub(super) alias: Option<Ident>,
     pub(super) condition: Option<Expr>,
     pub(super) by_index: bool,
+    pub(super) required: bool,
+    pub(super) zipped: bool,
     pub(super) value: Option<Expr>,
 }
 

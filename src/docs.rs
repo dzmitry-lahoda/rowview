@@ -17,21 +17,9 @@ pub enum FieldKind {
     Select,
 }
 
-impl FieldKind {
-    pub fn as_str(&self) -> &str {
-        self.as_ref()
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum FieldMode {
     Direct,
     Increment,
-}
-
-impl FieldMode {
-    pub fn as_str(&self) -> &str {
-        self.as_ref()
-    }
 }

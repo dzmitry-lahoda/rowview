@@ -1,0 +1,4 @@
+[alias]
+f = "fmt --check"
+c = "clippy --fix --allow-dirty --allow-staged --all-targets --all-features"
+t = "test --all-targets --all-features"

@@ -46,7 +46,6 @@ fn custom_map_wrapper_can_be_axis() {
     assert_eq!(pairs, vec![(1, 10), (2, 20), (3, 30)]);
 }
 
-
 #[test]
 fn nested_axis() {
     struct B {
@@ -91,7 +90,6 @@ fn nested_axis() {
     assert_eq!(rows[2].id, 3);
     assert_eq!(rows[2].ad, 30.0);
 }
-
 
 #[test]
 fn nested_with_parent_copies() {
@@ -153,8 +151,6 @@ fn nested_with_parent_copies() {
     assert_eq!(rows[2].id, 3);
     assert_eq!(rows[2].ad, 30.0);
 }
-
-
 
 // Case 2:
 // #[copy(root.c)]

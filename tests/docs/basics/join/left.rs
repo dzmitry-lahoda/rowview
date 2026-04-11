@@ -20,7 +20,6 @@ fn vec_tuple_vec_tuple_into_option() {
             joined_value_key: Option<u32>,
             #[select(select = vals.1)]
             joined_value: Option<u16>,
-            
         }
     }
 
@@ -47,18 +46,10 @@ fn vec_tuple_vec_tuple_into_option() {
 }
 
 #[test]
-fn vec_tuple_array_into_option() {
-    
-}
-
+fn vec_tuple_array_into_option() {}
 
 #[test]
-fn multi() {
-    
-}
-
+fn multi() {}
 
 #[test]
-fn std_map() {
-    
-}
+fn std_map() {}

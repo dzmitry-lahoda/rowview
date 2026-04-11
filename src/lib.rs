@@ -97,7 +97,7 @@ impl RowsetSpec {
             let mut expr = None;
             let mut join = None;
             for attr in attrs {
-                if attr.path().is_ident(FieldKind::Copy.as_str()) {
+                if attr.path().is_ident(FieldKind::Copy.as_ref()) {
                     kind = Some(FieldKind::Copy);
                     if let Ok(named) = attr.parse_args::<IncrementExpr>() {
                         mode = FieldMode::Increment;
@@ -106,15 +106,15 @@ impl RowsetSpec {
                         expr = Some(attr.parse_args()?);
                     }
                 }
-                if attr.path().is_ident(FieldKind::FromAxis.as_str()) {
+                if attr.path().is_ident(FieldKind::FromAxis.as_ref()) {
                     kind = Some(FieldKind::FromAxis);
                     expr = Some(attr.parse_args()?);
                 }
-                if attr.path().is_ident(FieldKind::FromIndex.as_str()) {
+                if attr.path().is_ident(FieldKind::FromIndex.as_ref()) {
                     kind = Some(FieldKind::FromIndex);
                     expr = Some(attr.parse_args()?);
                 }
-                if attr.path().is_ident(FieldKind::Join.as_str()) {
+                if attr.path().is_ident(FieldKind::Join.as_ref()) {
                     kind = Some(FieldKind::Join);
                     let spec = attr.parse_args::<JoinOptionSpec>()?;
                     expr = Some(spec.value.clone().ok_or_else(|| {
@@ -122,7 +122,7 @@ impl RowsetSpec {
                     })?);
                     join = Some(spec);
                 }
-                if attr.path().is_ident(FieldKind::Select.as_str()) {
+                if attr.path().is_ident(FieldKind::Select.as_ref()) {
                     kind = Some(FieldKind::Select);
                     attr.parse_nested_meta(|meta| {
                         if meta.path.is_ident("select") {
@@ -186,10 +186,13 @@ impl RowsetSpec {
 impl Parse for IncrementExpr {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let key: Ident = input.parse()?;
-        if key != FieldMode::Increment.as_str() {
+        if key != {
+            let this = &FieldMode::Increment;
+            this.as_ref()
+        } {
             return Err(syn::Error::new(
                 key.span(),
-                format!("expected `{}` = expr", FieldMode::Increment.as_str()),
+                format!("expected `{}` = expr", FieldMode::Increment.as_ref()),
             ));
         }
         input.parse::<Token![=]>()?;
@@ -205,6 +208,8 @@ impl Parse for JoinOptionSpec {
         let mut alias = None;
         let mut condition = None;
         let mut by_index = false;
+        let mut required = false;
+        let mut zipped = false;
         let mut value = None;
 
         let starts_with_key = {
@@ -223,6 +228,15 @@ impl Parse for JoinOptionSpec {
             let key_span = input.span();
             match key.as_str() {
                 "left" | "from" => source = Some(input.parse()?),
+                "must" => {
+                    required = true;
+                    source = Some(input.parse()?);
+                }
+                "zip" => {
+                    required = true;
+                    zipped = true;
+                    source = Some(input.parse()?);
+                }
                 "index" => {
                     by_index = true;
                     source = Some(input.parse()?);
@@ -235,7 +249,7 @@ impl Parse for JoinOptionSpec {
                     source = Some(input.parse()?);
                 }
                 _ => return Err(input.error(
-                    "expected `left`, `from`, `as`, `alias`, `on`, `select`, `option`, or `value`",
+                    "expected `left`, `from`, `must`, `zip`, `index`, `as`, `alias`, `on`, `select`, `option`, or `value`",
                 )),
             }
             if input.is_empty() {
@@ -253,6 +267,8 @@ impl Parse for JoinOptionSpec {
                 Some(condition.ok_or_else(|| input.error("missing join condition (`on = ...`)"))?)
             },
             by_index,
+            required,
+            zipped,
             value,
         })
     }
@@ -307,6 +323,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
         let rowset_joins = &rowset.joins;
         let index_join_len_asserts = rowset_joins
             .iter()
+            .chain(rowset.fields.iter().filter_map(|field| field.join.as_ref()))
             .filter(|join| join.by_index)
             .map(|join| -> Result<_> {
                 let join_source = join.source.as_ref().ok_or_else(|| {
@@ -319,6 +336,37 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
                         (#axis).len(),
                         (#join_source).len(),
                         "rowview index join requires axis and joined collection lengths to match"
+                    );
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let zip_join_key_asserts = rowset_joins
+            .iter()
+            .chain(rowset.fields.iter().filter_map(|field| field.join.as_ref()))
+            .filter(|join| join.zipped)
+            .map(|join| -> Result<_> {
+                let join_source = join
+                    .source
+                    .as_ref()
+                    .ok_or_else(|| syn::Error::new(Span::call_site(), "zip join requires source"))?;
+                let condition_expr = join
+                    .condition
+                    .as_ref()
+                    .ok_or_else(|| syn::Error::new_spanned(join_source, "zip join requires `on = ...`"))?;
+                let join_iter = rewrite_source_expr(join_source, ROOT_ATTR, quote! { self });
+                let axis_iter = rewrite_axis_iter_expr(&rowset.axis, nested_axis.as_ref());
+                let condition = rewrite_join_context_expr(
+                    condition_expr,
+                    nested_axis.as_ref(),
+                    join_source,
+                    join.alias.as_ref(),
+                );
+                Ok(quote! {
+                    assert!(
+                        (#join_iter)
+                            .iter()
+                            .all(|join_item| (#axis_iter).any(|(axis_parent, axis_item)| #condition)),
+                        "rowview zip join found joined item with no matching axis item"
                     );
                 })
             })
@@ -382,6 +430,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
             quote! {
                 {
                     #( #index_join_len_asserts )*
+                    #( #zip_join_key_asserts )*
                     #( #increment_bindings )*
                     #axis_iter.enumerate().map(|(axis_index, axis_item)| {
                         let (axis_parent, axis_item) = axis_item;
@@ -551,13 +600,19 @@ fn rewrite_join_select_expr(
         .condition
         .as_ref()
         .ok_or_else(|| syn::Error::new_spanned(value_expr, "join requires `on = ...`"))?;
-    let condition = rewrite_join_context_expr(
-        condition_expr,
-        nested_axis,
-        &join_axis,
-        join.alias.as_ref(),
-    );
+    let condition =
+        rewrite_join_context_expr(condition_expr, nested_axis, &join_axis, join.alias.as_ref());
     let value = rewrite_join_context_expr(value_expr, nested_axis, &join_axis, join.alias.as_ref());
+
+    if join.required {
+        return Ok(quote! {
+            (#join_iter)
+                .iter()
+                .find(|join_item| #condition)
+                .and_then(|join_item| ::core::option::Option::Some(#value))
+                .expect("rowview must join found no matching item")
+        });
+    }
 
     Ok(quote! {
         (#join_iter)
@@ -628,7 +683,8 @@ fn parse_index_join_binding_expr(
         return None;
     };
     if path.qself.is_some()
-        || !(path.path.is_ident("join") || join_alias.is_some_and(|alias| path.path.is_ident(alias)))
+        || !(path.path.is_ident("join")
+            || join_alias.is_some_and(|alias| path.path.is_ident(alias)))
     {
         return None;
     }
