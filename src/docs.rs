@@ -24,3 +24,21 @@ pub enum FieldMode {
     Direct,
     Increment,
 }
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, strum::AsRefStr, strum::EnumString, strum::VariantNames,
+)]
+#[strum(serialize_all = "snake_case")]
+pub enum JoinKey {
+    Left,
+    From,
+    Must,
+    Zip,
+    Index,
+    As,
+    Alias,
+    Option,
+    On,
+    Value,
+    Select,
+}

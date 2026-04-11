@@ -47,7 +47,7 @@ fn sum_nested_values_into_axis_rows_with_cast() {
     mod schema {
         #[rowset(name = abcs, axis = root.a)]
         struct Abcs {
-            #[agg(sum = axis.1.cs)]
+            #[agg(sum = axis.1.cs, convert = into)]
             cs: u64,
         }
     }
