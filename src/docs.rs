@@ -9,6 +9,7 @@ pub const ROWS_SUFFIX: &str = "Rows";
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum FieldKind {
+    Agg,
     /// Repeated context
     Copy,
     FromAxis,

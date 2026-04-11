@@ -106,6 +106,16 @@ impl RowsetSpec {
                         expr = Some(attr.parse_args()?);
                     }
                 }
+                if attr.path().is_ident(FieldKind::Agg.as_ref()) {
+                    kind = Some(FieldKind::Agg);
+                    attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("sum") {
+                            expr = Some(meta.value()?.parse()?);
+                            return Ok(());
+                        }
+                        Err(meta.error("unsupported agg attribute"))
+                    })?;
+                }
                 if attr.path().is_ident(FieldKind::FromAxis.as_ref()) {
                     kind = Some(FieldKind::FromAxis);
                     expr = Some(attr.parse_args()?);
@@ -389,6 +399,11 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
                 (FieldKind::Copy, FieldMode::Direct) | (FieldKind::FromAxis, FieldMode::Direct) => {
                     rewrite_row_expr(&field.expr, nested_axis.as_ref())
                 }
+                (FieldKind::Agg, FieldMode::Direct) => {
+                    let values = rewrite_row_expr(&field.expr, nested_axis.as_ref());
+                    let ty = &field.ty;
+                    quote! { (#values).iter().map(|value| ::core::convert::Into::<#ty>::into(*value)).sum::<#ty>() }
+                }
                 (FieldKind::FromIndex, FieldMode::Direct) => {
                     quote! {
                         axis_index
@@ -412,7 +427,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
                         value
                     }}
                 }
-                (FieldKind::FromAxis | FieldKind::FromIndex | FieldKind::Join | FieldKind::Select, FieldMode::Increment) => unreachable!(),
+                (FieldKind::Agg | FieldKind::FromAxis | FieldKind::FromIndex | FieldKind::Join | FieldKind::Select, FieldMode::Increment) => unreachable!(),
             };
             Ok(quote! { #name: #value })
         }).collect::<Result<Vec<_>>>()?;
