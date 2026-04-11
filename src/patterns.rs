@@ -40,7 +40,8 @@ pub(super) struct IncrementExpr {
 pub(super) struct JoinOptionSpec {
     pub(super) source: Option<Expr>,
     pub(super) alias: Option<Ident>,
-    pub(super) condition: Expr,
+    pub(super) condition: Option<Expr>,
+    pub(super) by_index: bool,
     pub(super) value: Option<Expr>,
 }
 

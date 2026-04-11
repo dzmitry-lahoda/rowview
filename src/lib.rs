@@ -1,14 +1,23 @@
 mod docs;
 mod patterns;
 
-use crate::docs::{AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR, ROWS_SUFFIX};
-use crate::patterns::{FieldSpec, IncrementExpr, JoinOptionSpec, NestedAxisSpec, RowsArgs, RowsModule, RowsetSpec};
+use crate::docs::{
+    AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, NAME_ATTR, ROOT_ATTR, ROWS_SUFFIX,
+    ROWSET_ATTR,
+};
+use crate::patterns::{
+    FieldSpec, IncrementExpr, JoinOptionSpec, NestedAxisSpec, RowsArgs, RowsModule, RowsetSpec,
+};
 use heck::ToUpperCamelCase;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Expr, ExprBinary, ExprCall, ExprClosure, ExprField, ExprGroup, ExprIndex, ExprMethodCall, ExprParen, ExprPath, ExprReference, ExprUnary, Ident, Item, ItemStruct, Member, Result, Token, braced, parse_macro_input};
+use syn::{
+    Expr, ExprBinary, ExprCall, ExprClosure, ExprField, ExprGroup, ExprIndex, ExprMethodCall,
+    ExprParen, ExprPath, ExprReference, ExprUnary, Ident, Item, ItemStruct, Member, Result, Token,
+    braced, parse_macro_input,
+};
 
 #[proc_macro_attribute]
 pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -20,12 +29,14 @@ pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
         .into()
 }
 
-
 impl Parse for RowsArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let key: Ident = input.parse()?;
         if key != ROOT_ATTR {
-            return Err(syn::Error::new(key.span(), "expected `${ROOT_ATTR} = Ident`"));
+            return Err(syn::Error::new(
+                key.span(),
+                "expected `${ROOT_ATTR} = Ident`",
+            ));
         }
         input.parse::<Token![=]>()?;
         Ok(Self {
@@ -33,8 +44,6 @@ impl Parse for RowsArgs {
         })
     }
 }
-
-
 
 impl Parse for RowsModule {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
@@ -49,8 +58,15 @@ impl Parse for RowsModule {
         while !content.is_empty() {
             match content.parse::<Item>()? {
                 Item::Use(item_use) => imports.push(item_use),
-                Item::Struct(item_struct) => rowsets.push(RowsetSpec::from_item_struct(item_struct)?),
-                item => return Err(syn::Error::new_spanned(item, "expected `use` or `struct` item")),
+                Item::Struct(item_struct) => {
+                    rowsets.push(RowsetSpec::from_item_struct(item_struct)?)
+                }
+                item => {
+                    return Err(syn::Error::new_spanned(
+                        item,
+                        "expected `use` or `struct` item",
+                    ));
+                }
             }
         }
 
@@ -62,8 +78,6 @@ impl Parse for RowsModule {
         })
     }
 }
-
-
 
 impl RowsetSpec {
     fn from_item_struct(item_struct: ItemStruct) -> Result<Self> {
@@ -103,11 +117,9 @@ impl RowsetSpec {
                 if attr.path().is_ident(FieldKind::Join.as_str()) {
                     kind = Some(FieldKind::Join);
                     let spec = attr.parse_args::<JoinOptionSpec>()?;
-                    expr = Some(
-                        spec.value
-                            .clone()
-                            .ok_or_else(|| syn::Error::new(name_span, "missing join projection (`select = ...`)"))?,
-                    );
+                    expr = Some(spec.value.clone().ok_or_else(|| {
+                        syn::Error::new(name_span, "missing join projection (`select = ...`)")
+                    })?);
                     join = Some(spec);
                 }
                 if attr.path().is_ident(FieldKind::Select.as_str()) {
@@ -123,11 +135,13 @@ impl RowsetSpec {
             }
 
             fields.push(FieldSpec {
-                kind: kind.ok_or_else(|| syn::Error::new(name.span(), "missing field attribute"))?,
+                kind: kind
+                    .ok_or_else(|| syn::Error::new(name.span(), "missing field attribute"))?,
                 mode,
                 name,
                 ty,
-                expr: expr.ok_or_else(|| syn::Error::new(name_span, "missing source expression"))?,
+                expr: expr
+                    .ok_or_else(|| syn::Error::new(name_span, "missing source expression"))?,
                 join,
             });
         }
@@ -161,13 +175,13 @@ impl RowsetSpec {
             joins,
             rowset_name: rowset_name
                 .ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${NAME_ATTR}`"))?,
-            axis: axis.ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${AXIS_ATTR}`"))?,
+            axis: axis
+                .ok_or_else(|| syn::Error::new(struct_name.span(), "missing `${AXIS_ATTR}`"))?,
             struct_name,
             fields,
         })
     }
 }
-
 
 impl Parse for IncrementExpr {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
@@ -179,7 +193,9 @@ impl Parse for IncrementExpr {
             ));
         }
         input.parse::<Token![=]>()?;
-        Ok(Self { expr: input.parse()? })
+        Ok(Self {
+            expr: input.parse()?,
+        })
     }
 }
 
@@ -188,6 +204,7 @@ impl Parse for JoinOptionSpec {
         let mut source = None;
         let mut alias = None;
         let mut condition = None;
+        let mut by_index = false;
         let mut value = None;
 
         let starts_with_key = {
@@ -203,16 +220,23 @@ impl Parse for JoinOptionSpec {
         while !input.is_empty() {
             let key = parse_join_key(input)?;
             input.parse::<Token![=]>()?;
+            let key_span = input.span();
             match key.as_str() {
                 "left" | "from" => source = Some(input.parse()?),
+                "index" => {
+                    by_index = true;
+                    source = Some(input.parse()?);
+                }
                 "as" | "alias" => alias = Some(input.parse()?),
                 "option" | "on" => condition = Some(input.parse()?),
                 "value" | "select" => value = Some(input.parse()?),
                 _ if source.is_none() => {
-                    alias.get_or_insert_with(|| Ident::new(&key, Span::call_site()));
+                    alias.get_or_insert_with(|| Ident::new(&key, key_span));
                     source = Some(input.parse()?);
                 }
-                _ => return Err(input.error("expected `left`, `from`, `as`, `alias`, `on`, `select`, `option`, or `value`")),
+                _ => return Err(input.error(
+                    "expected `left`, `from`, `as`, `alias`, `on`, `select`, `option`, or `value`",
+                )),
             }
             if input.is_empty() {
                 break;
@@ -223,7 +247,12 @@ impl Parse for JoinOptionSpec {
         Ok(Self {
             source,
             alias,
-            condition: condition.ok_or_else(|| input.error("missing join condition (`on = ...`)"))?,
+            condition: if by_index {
+                condition
+            } else {
+                Some(condition.ok_or_else(|| input.error("missing join condition (`on = ...`)"))?)
+            },
+            by_index,
             value,
         })
     }
@@ -243,7 +272,10 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
     let module_vis = module.vis;
     let module_name = module.name;
     let module_imports = module.imports;
-    let rows_type = format_ident!("{}{ROWS_SUFFIX}", module_name.to_string().to_upper_camel_case());
+    let rows_type = format_ident!(
+        "{}{ROWS_SUFFIX}",
+        module_name.to_string().to_upper_camel_case()
+    );
 
     let row_structs = module.rowsets.iter().map(|rowset| {
         let attrs = &rowset.attrs;
@@ -273,6 +305,24 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
         let nested_axis = parse_nested_axis_expr(&rowset.axis);
         let axis_iter = rewrite_axis_iter_expr(&rowset.axis, nested_axis.as_ref());
         let rowset_joins = &rowset.joins;
+        let index_join_len_asserts = rowset_joins
+            .iter()
+            .filter(|join| join.by_index)
+            .map(|join| -> Result<_> {
+                let join_source = join.source.as_ref().ok_or_else(|| {
+                    syn::Error::new(Span::call_site(), "index join requires source")
+                })?;
+                let axis = rewrite_source_expr(&rowset.axis, ROOT_ATTR, quote! { self });
+                let join_source = rewrite_source_expr(join_source, ROOT_ATTR, quote! { self });
+                Ok(quote! {
+                    assert_eq!(
+                        (#axis).len(),
+                        (#join_source).len(),
+                        "rowview index join requires axis and joined collection lengths to match"
+                    );
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
         let struct_name = &rowset.struct_name;
         let qualified_struct_name = quote! { #module_name::#struct_name };
         let increment_bindings = rowset.fields.iter().filter_map(|field| {
@@ -331,6 +381,7 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
         } else {
             quote! {
                 {
+                    #( #index_join_len_asserts )*
                     #( #increment_bindings )*
                     #axis_iter.enumerate().map(|(axis_index, axis_item)| {
                         let (axis_parent, axis_item) = axis_item;
@@ -377,7 +428,6 @@ fn rewrite_source_expr(
     rewrite_context_expr(expr, &[(base_name, replacement)])
 }
 
-
 fn rewrite_axis_iter_expr(
     expr: &Expr,
     nested_axis: Option<&NestedAxisSpec>,
@@ -394,12 +444,7 @@ fn parse_nested_axis_expr(expr: &Expr) -> Option<NestedAxisSpec> {
     let Expr::Field(field) = expr else {
         return None;
     };
-    let Expr::Index(index) = &*field.base else {
-        return None;
-    };
-    if !matches!(&*index.index, Expr::Range(_)) {
-        return None;
-    }
+    let index = field_range_index(field)?;
 
     Some(NestedAxisSpec {
         parent: (*index.expr).clone(),
@@ -407,7 +452,9 @@ fn parse_nested_axis_expr(expr: &Expr) -> Option<NestedAxisSpec> {
     })
 }
 
-fn rewrite_nested_axis_iter_expr(nested_axis: Option<&NestedAxisSpec>) -> Option<proc_macro2::TokenStream> {
+fn rewrite_nested_axis_iter_expr(
+    nested_axis: Option<&NestedAxisSpec>,
+) -> Option<proc_macro2::TokenStream> {
     let nested_axis = nested_axis?;
     let base = rewrite_source_expr(&nested_axis.parent, ROOT_ATTR, quote! { self });
     let member = clone_member(&nested_axis.child);
@@ -418,10 +465,7 @@ fn rewrite_nested_axis_iter_expr(nested_axis: Option<&NestedAxisSpec>) -> Option
     })
 }
 
-fn rewrite_row_expr(
-    expr: &Expr,
-    nested_axis: Option<&NestedAxisSpec>,
-) -> proc_macro2::TokenStream {
+fn rewrite_row_expr(expr: &Expr, nested_axis: Option<&NestedAxisSpec>) -> proc_macro2::TokenStream {
     if let Some(nested_axis) = nested_axis
         && let Some(parent_expr) = rewrite_parent_expr(expr, nested_axis)
     {
@@ -444,12 +488,7 @@ fn rewrite_parent_expr(
     let Expr::Field(field) = expr else {
         return None;
     };
-    let Expr::Index(index) = &*field.base else {
-        return None;
-    };
-    if !matches!(&*index.index, Expr::Range(_)) {
-        return None;
-    }
+    let index = field_range_index(field)?;
     let parent = rewrite_source_expr(&nested_axis.parent, ROOT_ATTR, quote! { self });
     let requested_parent = rewrite_source_expr(&index.expr, ROOT_ATTR, quote! { self });
     if parent.to_string() != requested_parent.to_string() {
@@ -459,14 +498,24 @@ fn rewrite_parent_expr(
     Some(quote! { axis_parent.#member })
 }
 
+fn field_range_index(field: &ExprField) -> Option<&ExprIndex> {
+    let Expr::Index(index) = &*field.base else {
+        return None;
+    };
+    matches!(&*index.index, Expr::Range(_)).then_some(index)
+}
+
 fn rewrite_join_expr(
     join: &JoinOptionSpec,
     nested_axis: Option<&NestedAxisSpec>,
 ) -> Result<proc_macro2::TokenStream> {
-    let value = join
-        .value
-        .as_ref()
-        .ok_or_else(|| syn::Error::new_spanned(&join.condition, "join field requires `select = ...`"))?;
+    let value = join.value.as_ref().ok_or_else(|| {
+        let span_expr = join.condition.as_ref().or(join.source.as_ref());
+        span_expr.map_or_else(
+            || syn::Error::new(Span::call_site(), "join field requires `select = ...`"),
+            |expr| syn::Error::new_spanned(expr, "join field requires `select = ...`"),
+        )
+    })?;
     rewrite_join_select_expr(join, value, nested_axis)
 }
 
@@ -475,50 +524,155 @@ fn rewrite_join_select_expr(
     value_expr: &Expr,
     nested_axis: Option<&NestedAxisSpec>,
 ) -> Result<proc_macro2::TokenStream> {
-    let join_axis = join.source.clone()
-        .or_else(|| parse_join_axis_expr(&join.condition))
+    let join_axis = join
+        .source
+        .clone()
+        .or_else(|| {
+            join.condition
+                .as_ref()
+                .and_then(parse_join_axis_expr)
+        })
         .or_else(|| parse_join_axis_expr(value_expr))
         .ok_or_else(|| syn::Error::new_spanned(
-            &join.condition,
+            value_expr,
             "join expression must provide a source like `#[join(root.values[..], on = ..., select = ...)]` or reference a collection slice like `root.values[..].field`",
         ))?;
     let join_iter = rewrite_source_expr(&join_axis, ROOT_ATTR, quote! { self });
-    let condition = rewrite_join_context_expr(&join.condition, nested_axis, &join_axis, join.alias.as_ref());
+    if join.by_index {
+        let value = rewrite_index_join_context_expr(value_expr, nested_axis, join.alias.as_ref());
+        return Ok(quote! {
+            (#join_iter)
+                .iter()
+                .nth(axis_index)
+                .and_then(|join_item| ::core::option::Option::Some(#value))
+        });
+    }
+    let condition_expr = join
+        .condition
+        .as_ref()
+        .ok_or_else(|| syn::Error::new_spanned(value_expr, "join requires `on = ...`"))?;
+    let condition = rewrite_join_context_expr(
+        condition_expr,
+        nested_axis,
+        &join_axis,
+        join.alias.as_ref(),
+    );
     let value = rewrite_join_context_expr(value_expr, nested_axis, &join_axis, join.alias.as_ref());
 
     Ok(quote! {
-        (#join_iter).iter().find_map(|join_item| {
-            if #condition {
-                ::core::option::Option::Some(#value)
-            } else {
-                ::core::option::Option::None
-            }
-        })
+        (#join_iter)
+            .iter()
+            .find(|join_item| #condition)
+            .and_then(|join_item| ::core::option::Option::Some(#value))
     })
+}
+
+fn rewrite_index_join_context_expr(
+    expr: &Expr,
+    nested_axis: Option<&NestedAxisSpec>,
+    join_alias: Option<&Ident>,
+) -> proc_macro2::TokenStream {
+    let rewritten =
+        rewrite_index_join_item_expr(expr, join_alias).unwrap_or_else(|| quote! { #expr });
+    let rewritten = syn::parse2(rewritten).expect("rewritten expression remains valid");
+    rewrite_row_expr(&rewritten, nested_axis)
+}
+
+fn rewrite_index_join_item_expr(
+    expr: &Expr,
+    join_alias: Option<&Ident>,
+) -> Option<proc_macro2::TokenStream> {
+    match expr {
+        Expr::Field(field) => parse_index_join_binding_expr(field, join_alias).or_else(|| {
+            let base = rewrite_index_join_item_expr(&field.base, join_alias)?;
+            let member = clone_member(&field.member);
+            Some(quote! { #base.#member })
+        }),
+        Expr::Binary(binary) => {
+            let left = rewrite_index_join_item_expr(&binary.left, join_alias);
+            let right = rewrite_index_join_item_expr(&binary.right, join_alias);
+            (left.is_some() || right.is_some()).then(|| {
+                let left = left.unwrap_or_else(|| {
+                    let left = &binary.left;
+                    quote! { #left }
+                });
+                let right = right.unwrap_or_else(|| {
+                    let right = &binary.right;
+                    quote! { #right }
+                });
+                let op = &binary.op;
+                quote! { #left #op #right }
+            })
+        }
+        Expr::Paren(paren) => {
+            rewrite_index_join_item_expr(&paren.expr, join_alias).map(|expr| quote! { (#expr) })
+        }
+        Expr::Reference(reference) => {
+            rewrite_index_join_item_expr(&reference.expr, join_alias).map(|expr| quote! { &#expr })
+        }
+        Expr::Unary(unary) => {
+            let expr = rewrite_index_join_item_expr(&unary.expr, join_alias)?;
+            let op = &unary.op;
+            Some(quote! { #op #expr })
+        }
+        Expr::Group(group) => rewrite_index_join_item_expr(&group.expr, join_alias),
+        _ => None,
+    }
+}
+
+fn parse_index_join_binding_expr(
+    field: &ExprField,
+    join_alias: Option<&Ident>,
+) -> Option<proc_macro2::TokenStream> {
+    let Expr::Path(path) = &*field.base else {
+        return None;
+    };
+    if path.qself.is_some()
+        || !(path.path.is_ident("join") || join_alias.is_some_and(|alias| path.path.is_ident(alias)))
+    {
+        return None;
+    }
+    match &field.member {
+        Member::Unnamed(index) if index.index == 0 => Some(quote! { axis_item.0 }),
+        Member::Unnamed(index) if index.index == 1 => Some(quote! { *join_item }),
+        _ => None,
+    }
 }
 
 fn select_join_for_expr<'a>(
     expr: &Expr,
     joins: &'a [JoinOptionSpec],
 ) -> Option<&'a JoinOptionSpec> {
-    if joins.len() == 1 {
-        return joins.first();
+    match joins {
+        [join] => Some(join),
+        joins => joins.iter().find(|join| {
+            join.alias
+                .as_ref()
+                .is_some_and(|alias| expr_mentions_ident(expr, alias))
+        }),
     }
-    joins
-        .iter()
-        .find(|join| join.alias.as_ref().is_some_and(|alias| expr_mentions_ident(expr, alias)))
 }
 
 fn expr_mentions_ident(expr: &Expr, ident: &Ident) -> bool {
     match expr {
         Expr::Path(path) => path.qself.is_none() && path.path.is_ident(ident),
         Expr::Field(field) => expr_mentions_ident(&field.base, ident),
-        Expr::Index(index) => expr_mentions_ident(&index.expr, ident) || expr_mentions_ident(&index.index, ident),
-        Expr::Binary(binary) => expr_mentions_ident(&binary.left, ident) || expr_mentions_ident(&binary.right, ident),
-        Expr::Call(call) => expr_mentions_ident(&call.func, ident) || call.args.iter().any(|arg| expr_mentions_ident(arg, ident)),
+        Expr::Index(index) => {
+            expr_mentions_ident(&index.expr, ident) || expr_mentions_ident(&index.index, ident)
+        }
+        Expr::Binary(binary) => {
+            expr_mentions_ident(&binary.left, ident) || expr_mentions_ident(&binary.right, ident)
+        }
+        Expr::Call(call) => {
+            expr_mentions_ident(&call.func, ident)
+                || call.args.iter().any(|arg| expr_mentions_ident(arg, ident))
+        }
         Expr::MethodCall(method_call) => {
             expr_mentions_ident(&method_call.receiver, ident)
-                || method_call.args.iter().any(|arg| expr_mentions_ident(arg, ident))
+                || method_call
+                    .args
+                    .iter()
+                    .any(|arg| expr_mentions_ident(arg, ident))
         }
         Expr::Paren(paren) => expr_mentions_ident(&paren.expr, ident),
         Expr::Reference(reference) => expr_mentions_ident(&reference.expr, ident),
@@ -534,23 +688,18 @@ fn rewrite_join_context_expr(
     join_axis: &Expr,
     join_alias: Option<&Ident>,
 ) -> proc_macro2::TokenStream {
-    let rewritten = rewrite_join_item_expr(expr, join_axis, join_alias).unwrap_or_else(|| quote! { #expr });
+    let rewritten =
+        rewrite_join_item_expr(expr, join_axis, join_alias).unwrap_or_else(|| quote! { #expr });
     let rewritten = syn::parse2(rewritten).expect("rewritten expression remains valid");
     rewrite_row_expr(&rewritten, nested_axis)
 }
 
 fn parse_join_axis_expr(expr: &Expr) -> Option<Expr> {
     match expr {
-        Expr::Field(field) => {
-            let Expr::Index(index) = &*field.base else {
-                return parse_join_axis_expr(&field.base);
-            };
-            if matches!(&*index.index, Expr::Range(_)) {
-                return Some((*index.expr).clone());
-            }
-            parse_join_axis_expr(&field.base)
+        Expr::Field(field) => parse_join_axis_field_expr(field),
+        Expr::Binary(binary) => {
+            parse_join_axis_expr(&binary.left).or_else(|| parse_join_axis_expr(&binary.right))
         }
-        Expr::Binary(binary) => parse_join_axis_expr(&binary.left).or_else(|| parse_join_axis_expr(&binary.right)),
         Expr::Paren(paren) => parse_join_axis_expr(&paren.expr),
         Expr::Reference(reference) => parse_join_axis_expr(&reference.expr),
         Expr::Unary(unary) => parse_join_axis_expr(&unary.expr),
@@ -559,42 +708,48 @@ fn parse_join_axis_expr(expr: &Expr) -> Option<Expr> {
     }
 }
 
+fn parse_join_axis_field_expr(field: &ExprField) -> Option<Expr> {
+    field_range_index(field)
+        .map(|index| (*index.expr).clone())
+        .or_else(|| parse_join_axis_expr(&field.base))
+}
+
 fn rewrite_join_item_expr(
     expr: &Expr,
     join_axis: &Expr,
     join_alias: Option<&Ident>,
 ) -> Option<proc_macro2::TokenStream> {
     match expr {
-        Expr::Field(field) => {
-            if let Some(member) = parse_join_binding_member_expr(field, join_alias) {
-                return Some(quote! { join_item.#member });
-            }
-            if let Some(member) = parse_join_member_expr(field, join_axis) {
-                return Some(quote! { join_item.#member });
-            }
-            let base = rewrite_join_item_expr(&field.base, join_axis, join_alias)?;
-            let member = clone_member(&field.member);
-            Some(quote! { #base.#member })
-        }
+        Expr::Field(field) => parse_join_binding_member_expr(field, join_alias)
+            .or_else(|| parse_join_member_expr(field, join_axis))
+            .map(|member| quote! { join_item.#member })
+            .or_else(|| {
+                let base = rewrite_join_item_expr(&field.base, join_axis, join_alias)?;
+                let member = clone_member(&field.member);
+                Some(quote! { #base.#member })
+            }),
         Expr::Binary(binary) => {
             let left = rewrite_join_item_expr(&binary.left, join_axis, join_alias);
             let right = rewrite_join_item_expr(&binary.right, join_axis, join_alias);
-            if left.is_none() && right.is_none() {
-                return None;
-            }
-            let left = left.unwrap_or_else(|| {
-                let left = &binary.left;
-                quote! { #left }
-            });
-            let right = right.unwrap_or_else(|| {
-                let right = &binary.right;
-                quote! { #right }
-            });
-            let op = &binary.op;
-            Some(quote! { #left #op #right })
+            (left.is_some() || right.is_some()).then(|| {
+                let left = left.unwrap_or_else(|| {
+                    let left = &binary.left;
+                    quote! { #left }
+                });
+                let right = right.unwrap_or_else(|| {
+                    let right = &binary.right;
+                    quote! { #right }
+                });
+                let op = &binary.op;
+                quote! { #left #op #right }
+            })
         }
-        Expr::Paren(paren) => rewrite_join_item_expr(&paren.expr, join_axis, join_alias).map(|expr| quote! { (#expr) }),
-        Expr::Reference(reference) => rewrite_join_item_expr(&reference.expr, join_axis, join_alias).map(|expr| quote! { &#expr }),
+        Expr::Paren(paren) => rewrite_join_item_expr(&paren.expr, join_axis, join_alias)
+            .map(|expr| quote! { (#expr) }),
+        Expr::Reference(reference) => {
+            rewrite_join_item_expr(&reference.expr, join_axis, join_alias)
+                .map(|expr| quote! { &#expr })
+        }
         Expr::Unary(unary) => {
             let expr = rewrite_join_item_expr(&unary.expr, join_axis, join_alias)?;
             let op = &unary.op;
@@ -605,38 +760,21 @@ fn rewrite_join_item_expr(
     }
 }
 
-fn parse_join_binding_member_expr(
-    field: &ExprField,
-    join_alias: Option<&Ident>,
-) -> Option<Member> {
+fn parse_join_binding_member_expr(field: &ExprField, join_alias: Option<&Ident>) -> Option<Member> {
     let Expr::Path(path) = &*field.base else {
         return None;
     };
-    let is_join_binding = path.qself.is_none()
-        && (path.path.is_ident("join") || join_alias.is_some_and(|alias| path.path.is_ident(alias)));
-    if is_join_binding {
-        Some(clone_member(&field.member))
-    } else {
-        None
-    }
+    (path.qself.is_none()
+        && (path.path.is_ident("join")
+            || join_alias.is_some_and(|alias| path.path.is_ident(alias))))
+    .then(|| clone_member(&field.member))
 }
 
-fn parse_join_member_expr(
-    field: &ExprField,
-    join_axis: &Expr,
-) -> Option<Member> {
-    let Expr::Index(index) = &*field.base else {
-        return None;
-    };
-    if !matches!(&*index.index, Expr::Range(_)) {
-        return None;
-    }
+fn parse_join_member_expr(field: &ExprField, join_axis: &Expr) -> Option<Member> {
+    let index = field_range_index(field)?;
     let requested = rewrite_source_expr(&index.expr, ROOT_ATTR, quote! { self });
     let expected = rewrite_source_expr(join_axis, ROOT_ATTR, quote! { self });
-    if requested.to_string() != expected.to_string() {
-        return None;
-    }
-    Some(clone_member(&field.member))
+    (requested.to_string() == expected.to_string()).then(|| clone_member(&field.member))
 }
 
 fn rewrite_context_expr(
@@ -672,7 +810,9 @@ fn rewrite_expr(
         Expr::Binary(binary) => rewrite_expr_binary(binary, base_name, replacement),
         Expr::Call(call) => rewrite_expr_call(call, base_name, replacement),
         Expr::Closure(closure) => rewrite_expr_closure(closure, base_name, replacement),
-        Expr::MethodCall(method_call) => rewrite_expr_method_call(method_call, base_name, replacement),
+        Expr::MethodCall(method_call) => {
+            rewrite_expr_method_call(method_call, base_name, replacement)
+        }
         Expr::Paren(paren) => rewrite_expr_paren(paren, base_name, replacement),
         Expr::Reference(reference) => rewrite_expr_reference(reference, base_name, replacement),
         Expr::Unary(unary) => rewrite_expr_unary(unary, base_name, replacement),
