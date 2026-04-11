@@ -1,4 +1,4 @@
-//! By closure or method
+//! By closure or method.
 
 #[test]
 fn increment_from_local_trait_method() {

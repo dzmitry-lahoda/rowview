@@ -92,7 +92,7 @@ fn btree_set() {
     assert_eq!(rows[2].value, 30);
 }
 
-/// 3 row sets from 3 separate axis
+/// 3 row sets from 3 separate axes.
 #[test]
 fn three() {
     struct Root {

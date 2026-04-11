@@ -1,4 +1,4 @@
-//! Double depth axis, custom collections.
+//! Double-depth axes and custom collections.
 
 use std::collections::{HashMap, hash_map};
 

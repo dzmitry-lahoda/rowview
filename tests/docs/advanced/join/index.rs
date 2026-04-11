@@ -1,5 +1,5 @@
-//! So we join by location in array, assuming both collection are ordered.
-//! Only inner zip.
+//! Joins by array position, assuming both collections are ordered.
+//! Inner zip only.
 
 #[test]
 fn index_success() {

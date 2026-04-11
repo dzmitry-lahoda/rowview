@@ -1,4 +1,4 @@
-//! If any of axis exists, try to join with other axis.
+//! If any axis exists, try to join with another axis.
 // Multi-hop joins need dependency semantics:
 // Given axes x, y, and a:
 // - if x and y exist, y must exist for x

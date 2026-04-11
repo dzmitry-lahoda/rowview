@@ -1,4 +1,4 @@
-//! Macro allows use imports in schema module.
+//! Macro allows imports in the schema module.
 
 mod fixture {
     #[derive(Clone, Debug, Copy, PartialEq)]

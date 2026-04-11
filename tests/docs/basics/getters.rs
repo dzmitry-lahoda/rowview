@@ -1,4 +1,4 @@
-//! Usage of getters - map of original struct can be done via .get() method.
+//! Usage of getters: mapping from the original struct can be done via the .get() method.
 
 use std::collections::BTreeMap;
 

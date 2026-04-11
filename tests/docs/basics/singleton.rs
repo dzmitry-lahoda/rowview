@@ -1,4 +1,4 @@
-//! Primitive, simple structs, single depth, single item, single row, single array a like.
+//! Primitive values, simple structs, single depth, single item, single row, and single arrays.
 //! One feature at a time.
 
 use subdef::subdef;

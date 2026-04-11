@@ -8,10 +8,10 @@
   - closure
 - join
   - left
-  - must 
+  - must
   - custom filler
 - binding
- - copy - one element at specific path copued into many records
+ - copy - one element at a specific path copied into many records
  - multiple rowsets
 - containers
   - vector as map (tuple first element and property)
@@ -22,28 +22,28 @@
    - invariants
    - bijection of mapping
    - fail fast or result error
-- semantics  
-  - update forms aware like `Option<Option<T>>` or `Option<T>` or `Either<T, ()>`  or `Either<T,T>` , where T may or may be Default. 
-  - delta(aggeregatable) or final value aware (last written is correct)
+- semantics
+  - update-form aware types like `Option<Option<T>>`, `Option<T>`, `Either<T, ()>`, or `Either<T, T>`, where `T` may or may not be `Default`.
+  - delta-aggregatable or final-value aware (last written is correct)
 
-# Constraaints and limitations
+# Constraints and limitations
 
 - Does not `Clone` input structures.
-- Supports conversion of data from trusted source only.
-- Keys must be `Copy`
+- Supports conversion of data from trusted sources only.
+- Keys must be `Copy`.
 
-# Guidelines and opinionations
+# Guidelines and opinions
 
 Macro is:
-- token based, not string based
-- Rust syntax in attributed for deep integration with language and no need to lear new syntax
-- compile time typed
+- token-based, not string-based
+- Rust syntax in attributes for deep integration with the language and no need to learn new syntax
+- compile-time typed
 
 
-Fails fast panic is preffered to return error.
-Avods using closures as they are not declarative per se.
+Fail-fast panic is preferred to returning an error.
+Avoids using closures because they are not declarative per se.
 
-# Perfomance
+# Performance
 
-Need decide if builds maps/sets for joins or not. I did not do it yet.
-Need feed some join optimization article.
+Need to decide whether to build maps/sets for joins. I have not done it yet.
+Need to read a join optimization article.

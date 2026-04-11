@@ -1,4 +1,4 @@
-//! Documented type system is docs
+//! Documented type system.
 pub const ROOT_ATTR: &str = "root";
 pub const ROWSET_ATTR: &str = "rowset";
 pub const NAME_ATTR: &str = "name";

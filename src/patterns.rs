@@ -1,5 +1,5 @@
-//! Specializaton of mattched Rust expression patters.
-//! Form pure Rust based eDSL. Per se active docs for all possible features.
+//! Specialization of matched Rust expression patterns.
+//! Forms a pure Rust-based eDSL and acts as documentation for all possible features.
 
 use crate::docs::{FieldKind, FieldMode};
 use syn::{Attribute, Expr, Ident, ItemUse, Member, Visibility};

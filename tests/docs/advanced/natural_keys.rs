@@ -1,1 +1,1 @@
-//! Multivalue keys, 2 or 3 tuples, relevant hierarchical joins.
+//! Multi-value keys, 2- or 3-tuples, and relevant hierarchical joins.

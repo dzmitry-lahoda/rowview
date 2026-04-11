@@ -1,4 +1,4 @@
-//! Can set attribues on rows
+//! Can set attributes on rows.
 
 #[test]
 fn rows_can_have_serde_attributes() {

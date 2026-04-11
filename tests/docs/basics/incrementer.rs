@@ -1,4 +1,4 @@
-//! Increments and tests field from constat or statring from root value.
+//! Increments and tests fields from a constant or starting from a root value.
 
 #[test]
 fn increment_by_1() {
