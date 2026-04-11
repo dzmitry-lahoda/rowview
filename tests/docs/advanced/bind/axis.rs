@@ -1,3 +1,5 @@
+//! Forms virtual axis from several collection by join.
+//! Virtual axis can join.
 //! Multiple optional sources can project into one rowset.
 //! If any axis exists, try to join with another axis.
 // Multi-hop joins need dependency semantics:

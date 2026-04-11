@@ -1,3 +1,4 @@
+//! Uses multi axis.
 #![allow(dead_code)]
 
 use std::num::NonZero;
