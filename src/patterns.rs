@@ -30,6 +30,7 @@ pub(super) struct FieldSpec {
     pub(super) name: Ident,
     pub(super) ty: syn::Type,
     pub(super) expr: Expr,
+    pub(super) agg_convert_into: bool,
     pub(super) join: Option<JoinOptionSpec>,
 }
 

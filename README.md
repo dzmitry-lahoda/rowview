@@ -38,13 +38,17 @@ Macro is:
 - token-based, not string-based
 - Rust syntax in attributes for deep integration with the language and no need to learn new syntax
 - compile-time typed
+- reje
+- Summable types has delta word in name of fields (unless we agreed at some point on types).
 
-
-Fail-fast panic is preferred to returning an error.
-Avoids using closures because they are not declarative per se.
-Summable types has delta word in name of fields (unless we agreed at some point on types).
+- Fail-fast panic is preferred to returning an error.
+- avoids closures in attribues using closures because they are not declarative per se.
+- forbits closusers and function to be mapped
+- latest element in keyed, but not unique keyed collection, considered to be target of join by id
 
 # Performance
 
 Need to decide whether to build maps/sets for joins. I have not done it yet.
 Need to read a join optimization article.
+I guess then ask generate stress code and run under gungraun,
+and ask optimize.

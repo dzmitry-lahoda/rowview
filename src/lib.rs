@@ -95,6 +95,7 @@ impl RowsetSpec {
             let mut kind = None;
             let mut mode = FieldMode::Direct;
             let mut expr = None;
+            let mut agg_convert_into = false;
             let mut join = None;
             for attr in attrs {
                 if attr.path().is_ident(FieldKind::Copy.as_ref()) {
@@ -112,6 +113,20 @@ impl RowsetSpec {
                         if meta.path.is_ident("sum") {
                             expr = Some(meta.value()?.parse()?);
                             return Ok(());
+                        }
+                        if meta.path.is_ident("convert") {
+                            let convert: Ident = meta.value()?.parse()?;
+                            if convert == "into" {
+                                agg_convert_into = true;
+                                return Ok(());
+                            }
+                            return Err(meta.error("expected `convert = into`"));
+                        }
+                        if meta.path.is_ident("into") {
+                            let _: syn::Type = meta.value()?.parse()?;
+                            return Err(meta.error(
+                                "use `convert = into`; target type is inferred from the field type",
+                            ));
                         }
                         Err(meta.error("unsupported agg attribute"))
                     })?;
@@ -152,6 +167,7 @@ impl RowsetSpec {
                 ty,
                 expr: expr
                     .ok_or_else(|| syn::Error::new(name_span, "missing source expression"))?,
+                agg_convert_into,
                 join,
             });
         }
@@ -400,9 +416,13 @@ fn expand_rows(args: RowsArgs, module: RowsModule) -> Result<proc_macro2::TokenS
                     rewrite_row_expr(&field.expr, nested_axis.as_ref())
                 }
                 (FieldKind::Agg, FieldMode::Direct) => {
-                    let values = rewrite_row_expr(&field.expr, nested_axis.as_ref());
                     let ty = &field.ty;
-                    quote! { (#values).iter().map(|value| ::core::convert::Into::<#ty>::into(*value)).sum::<#ty>() }
+                    if let Some(join) = select_join_for_expr(&field.expr, rowset_joins) {
+                        rewrite_join_agg_sum_expr(join, &field.expr, nested_axis.as_ref(), ty)?
+                    } else {
+                        let values = rewrite_row_expr(&field.expr, nested_axis.as_ref());
+                        rewrite_agg_sum_iter_expr(values, ty, field.agg_convert_into)
+                    }
                 }
                 (FieldKind::FromIndex, FieldMode::Direct) => {
                     quote! {
@@ -583,6 +603,65 @@ fn rewrite_join_expr(
     rewrite_join_select_expr(join, value, nested_axis)
 }
 
+fn rewrite_agg_sum_iter_expr(
+    values: proc_macro2::TokenStream,
+    ty: &syn::Type,
+    convert_into: bool,
+) -> proc_macro2::TokenStream {
+    if convert_into {
+        return quote! {
+            (#values)
+                .iter()
+                .map(|value| ::core::convert::Into::<#ty>::into(*value))
+                .sum::<#ty>()
+        };
+    }
+
+    quote! {
+        (#values)
+            .iter()
+            .map(|value| ::core::iter::once(*value).sum::<#ty>())
+            .sum::<#ty>()
+    }
+}
+
+fn rewrite_join_agg_sum_expr(
+    join: &JoinOptionSpec,
+    value_expr: &Expr,
+    nested_axis: Option<&NestedAxisSpec>,
+    ty: &syn::Type,
+) -> Result<proc_macro2::TokenStream> {
+    let join_axis = join
+        .source
+        .clone()
+        .or_else(|| {
+            join.condition
+                .as_ref()
+                .and_then(parse_join_axis_expr)
+        })
+        .or_else(|| parse_join_axis_expr(value_expr))
+        .ok_or_else(|| syn::Error::new_spanned(
+            value_expr,
+            "agg expression must provide a join source like `#[joins(left = root.values[..], as = vals, on = ...)]`",
+        ))?;
+    let condition_expr = join
+        .condition
+        .as_ref()
+        .ok_or_else(|| syn::Error::new_spanned(value_expr, "join agg requires `on = ...`"))?;
+    let join_iter = rewrite_source_expr(&join_axis, ROOT_ATTR, quote! { self });
+    let condition =
+        rewrite_join_context_expr(condition_expr, nested_axis, &join_axis, join.alias.as_ref());
+    let value = rewrite_join_context_expr(value_expr, nested_axis, &join_axis, join.alias.as_ref());
+
+    Ok(quote! {
+        (#join_iter)
+            .iter()
+            .filter(|join_item| #condition)
+            .map(|join_item| ::core::convert::Into::<#ty>::into(#value))
+            .sum::<#ty>()
+    })
+}
+
 fn rewrite_join_select_expr(
     join: &JoinOptionSpec,
     value_expr: &Expr,
@@ -623,7 +702,7 @@ fn rewrite_join_select_expr(
         return Ok(quote! {
             (#join_iter)
                 .iter()
-                .find(|join_item| #condition)
+                .rfind(|join_item| #condition)
                 .and_then(|join_item| ::core::option::Option::Some(#value))
                 .expect("rowview must join found no matching item")
         });
@@ -632,7 +711,7 @@ fn rewrite_join_select_expr(
     Ok(quote! {
         (#join_iter)
             .iter()
-            .find(|join_item| #condition)
+            .rfind(|join_item| #condition)
             .and_then(|join_item| ::core::option::Option::Some(#value))
     })
 }
