@@ -1,4 +1,5 @@
 //! Documented type system.
+
 pub const ROOT_ATTR: &str = "root";
 pub const ROWSET_ATTR: &str = "rowset";
 pub const NAME_ATTR: &str = "name";
@@ -41,4 +42,26 @@ pub enum JoinKey {
     On,
     Value,
     Select,
+}
+
+impl TryFrom<proc_macro2::Ident> for JoinKey {
+    type Error = syn::Error;
+
+    fn try_from(ident: proc_macro2::Ident) -> Result<Self, Self::Error> {
+        ident
+            .to_string()
+            .parse()
+            .map_err(|_| syn::Error::new(ident.span(), expected_join_key_message()))
+    }
+}
+
+fn expected_join_key_message() -> String {
+    format!(
+        "expected {}",
+        <JoinKey as strum::VariantNames>::VARIANTS
+            .iter()
+            .map(|key| format!("`{key}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }

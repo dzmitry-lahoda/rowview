@@ -1,5 +1,4 @@
-//! Specialization of matched Rust expression patterns.
-//! Forms a pure Rust-based eDSL and acts as documentation for all possible features.
+//! Parsed and validated intermediate representation for code generation.
 
 use crate::docs::{FieldKind, FieldMode};
 use syn::{Attribute, Expr, Ident, ItemUse, Member, Visibility};
@@ -13,6 +12,12 @@ pub(super) struct RowsModule {
     pub(super) name: Ident,
     pub(super) imports: Vec<ItemUse>,
     pub(super) rowsets: Vec<RowsetSpec>,
+}
+
+pub(super) struct RowsBuildPlan {
+    pub(super) args: RowsArgs,
+    pub(super) module: RowsModule,
+    pub(super) rowsets: Vec<RowsetBuildPlan>,
 }
 
 pub(super) struct RowsetSpec {
@@ -46,6 +51,30 @@ pub(super) struct JoinOptionSpec {
     pub(super) required: bool,
     pub(super) zipped: bool,
     pub(super) value: Option<Expr>,
+}
+
+pub(super) struct RowsetBuildPlan {
+    pub(super) rowset_index: usize,
+    pub(super) nested_axis: Option<NestedAxisSpec>,
+    pub(super) index_join_len_asserts: Vec<IndexJoinLenAssertPlan>,
+    pub(super) zip_join_key_asserts: Vec<ZipJoinKeyAssertPlan>,
+    pub(super) row_joins: Vec<RowJoinPlan>,
+}
+
+pub(super) struct IndexJoinLenAssertPlan {
+    pub(super) source: Expr,
+}
+
+pub(super) struct ZipJoinKeyAssertPlan {
+    pub(super) source: Expr,
+    pub(super) condition: Expr,
+    pub(super) alias: Option<Ident>,
+}
+
+pub(super) struct RowJoinPlan {
+    pub(super) join_index: usize,
+    pub(super) binding: Ident,
+    pub(super) join_axis: Expr,
 }
 
 pub(super) struct NestedAxisSpec {
