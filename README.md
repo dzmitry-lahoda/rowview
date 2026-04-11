@@ -42,6 +42,7 @@ Macro is:
 
 Fail-fast panic is preferred to returning an error.
 Avoids using closures because they are not declarative per se.
+Summable types has delta word in name of fields (unless we agreed at some point on types).
 
 # Performance
 
