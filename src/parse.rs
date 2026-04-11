@@ -2,7 +2,7 @@ use crate::docs::{AXIS_ATTR, FieldKind, FieldMode, JoinKey, NAME_ATTR, ROOT_ATTR
 use crate::generate::{
     join_axis_for_expr, parse_nested_axis_expr, row_join_binding_ident, select_join_for_expr_index,
 };
-use crate::ir::{
+use crate::schema::{
     FieldSpec, IncrementExpr, IndexJoinLenAssertPlan, JoinOptionSpec, RowJoinPlan, RowsArgs,
     RowsBuildPlan, RowsModule, RowsetBuildPlan, RowsetSpec, ZipJoinKeyAssertPlan,
 };
@@ -365,27 +365,4 @@ fn rowset_selects_join(rowset: &RowsetSpec, join_index: usize) -> bool {
         ) && select_join_for_expr_index(&field.expr, &rowset.joins)
             .is_some_and(|(selected_index, _)| selected_index == join_index)
     })
-}
-
-impl TryFrom<proc_macro2::Ident> for JoinKey {
-    type Error = syn::Error;
-
-    fn try_from(ident: proc_macro2::Ident) -> Result<Self, Self::Error> {
-        ident
-            .to_string()
-            .parse()
-            .map_err(|_| syn::Error::new(ident.span(), expected_join_key_message()))
-    }
-}
-
-
-fn expected_join_key_message() -> String {
-    format!(
-        "expected {}",
-        <JoinKey as strum::VariantNames>::VARIANTS
-            .iter()
-            .map(|key| format!("`{key}`"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
 }

@@ -1,7 +1,7 @@
 use crate::docs::{
     AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, ROOT_ATTR, ROWS_SUFFIX,
 };
-use crate::ir::{JoinOptionSpec, NestedAxisSpec, RowJoinPlan, RowsBuildPlan};
+use crate::schema::{JoinOptionSpec, NestedAxisSpec, RowJoinPlan, RowsBuildPlan};
 use heck::ToUpperCamelCase;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
@@ -388,7 +388,7 @@ fn rewrite_join_lookup_expr(
         rewrite_join_context_expr(condition_expr, nested_axis, &join_axis, join.alias.as_ref());
 
     Ok(quote! {
-        (#join_source).iter().rfind(|join_item| #condition)
+        (#join_source).iter().filter(|join_item| #condition).last()
     })
 }
 
