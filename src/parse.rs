@@ -3,14 +3,15 @@ use crate::generate::{
     join_axis_for_expr, parse_nested_axis_expr, row_join_binding_ident, select_join_for_expr_index,
 };
 use crate::schema::{
-    FieldSpec, IncrementExpr, IndexJoinLenAssertPlan, JoinOptionSpec, RowJoinPlan, RowsArgs,
-    RowsBuildPlan, RowsModule, RowsetBuildPlan, RowsetSpec, ZipJoinKeyAssertPlan,
+    AttributeSpec, DatabaseBuildPlan, IncrementExpr, IndexJoinCardinalityPlan, JoinLookup,
+    JoinRequirement, JoinSpec, RelationBuildPlan, RelationSchema, RowJoinBindingPlan, RowViewArgs,
+    SchemaModule, ZipJoinCoveragePlan,
 };
 use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, Item, ItemStruct, Result, Token, braced};
 
-impl Parse for RowsArgs {
+impl Parse for RowViewArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let key: Ident = input.parse()?;
         if key != ROOT_ATTR {
@@ -26,7 +27,7 @@ impl Parse for RowsArgs {
     }
 }
 
-impl Parse for RowsModule {
+impl Parse for SchemaModule {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let vis = input.parse()?;
         input.parse::<Token![mod]>()?;
@@ -35,12 +36,12 @@ impl Parse for RowsModule {
         braced!(content in input);
 
         let mut imports = Vec::new();
-        let mut rowsets = Vec::new();
+        let mut relations = Vec::new();
         while !content.is_empty() {
             match content.parse::<Item>()? {
                 Item::Use(item_use) => imports.push(item_use),
                 Item::Struct(item_struct) => {
-                    rowsets.push(RowsetSpec::from_item_struct(item_struct)?)
+                    relations.push(RelationSchema::from_item_struct(item_struct)?)
                 }
                 item => {
                     return Err(syn::Error::new_spanned(
@@ -55,22 +56,22 @@ impl Parse for RowsModule {
             vis,
             name,
             imports,
-            rowsets,
+            relations,
         })
     }
 }
 
-impl RowsetSpec {
+impl RelationSchema {
     fn from_item_struct(item_struct: ItemStruct) -> Result<Self> {
-        let attrs = item_struct.attrs;
+        let rust_attributes = item_struct.attrs;
         let struct_name = item_struct.ident;
-        let mut fields = Vec::new();
-        for field in item_struct.fields {
-            let name = field
+        let mut attributes = Vec::new();
+        for attribute in item_struct.fields {
+            let name = attribute
                 .ident
                 .ok_or_else(|| syn::Error::new(struct_name.span(), "expected named field"))?;
-            let ty = field.ty;
-            let attrs = field.attrs;
+            let ty = attribute.ty;
+            let rust_attributes = attribute.attrs;
             let name_span = name.span();
 
             let mut kind = None;
@@ -78,7 +79,7 @@ impl RowsetSpec {
             let mut expr = None;
             let mut agg_convert_into = false;
             let mut join = None;
-            for attr in attrs {
+            for attr in rust_attributes {
                 if attr.path().is_ident(FieldKind::Copy.as_ref()) {
                     kind = Some(FieldKind::Copy);
                     if let Ok(named) = attr.parse_args::<IncrementExpr>() {
@@ -122,7 +123,7 @@ impl RowsetSpec {
                 }
                 if attr.path().is_ident(FieldKind::Join.as_ref()) {
                     kind = Some(FieldKind::Join);
-                    let spec = attr.parse_args::<JoinOptionSpec>()?;
+                    let spec = attr.parse_args::<JoinSpec>()?;
                     expr = Some(spec.value.clone().ok_or_else(|| {
                         syn::Error::new(name_span, "missing join projection (`select = ...`)")
                     })?);
@@ -140,7 +141,7 @@ impl RowsetSpec {
                 }
             }
 
-            fields.push(FieldSpec {
+            attributes.push(AttributeSpec {
                 kind: kind
                     .ok_or_else(|| syn::Error::new(name.span(), "missing field attribute"))?,
                 mode,
@@ -153,22 +154,22 @@ impl RowsetSpec {
             });
         }
 
-        let mut rowset_name = None;
-        let mut axis = None;
+        let mut relation_name = None;
+        let mut generator = None;
         let mut joins = Vec::new();
         let mut row_attrs = Vec::new();
-        for attr in attrs {
+        for attr in rust_attributes {
             if attr.path().is_ident(ROWSET_ATTR) {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident(NAME_ATTR) {
-                        rowset_name = Some(meta.value()?.parse()?);
+                        relation_name = Some(meta.value()?.parse()?);
                         return Ok(());
                     }
                     if meta.path.is_ident(AXIS_ATTR) {
-                        axis = Some(meta.value()?.parse()?);
+                        generator = Some(meta.value()?.parse()?);
                         return Ok(());
                     }
-                    Err(meta.error("unsupported rowset attribute"))
+                    Err(meta.error("unsupported relation attribute"))
                 })?;
             } else if attr.path().is_ident("joins") {
                 joins.push(attr.parse_args()?);
@@ -178,16 +179,16 @@ impl RowsetSpec {
         }
 
         Ok(Self {
-            attrs: row_attrs,
+            rust_attributes: row_attrs,
             joins,
-            rowset_name: rowset_name.ok_or_else(|| {
+            relation_name: relation_name.ok_or_else(|| {
                 syn::Error::new(struct_name.span(), format!("missing `{NAME_ATTR}`"))
             })?,
-            axis: axis.ok_or_else(|| {
+            generator: generator.ok_or_else(|| {
                 syn::Error::new(struct_name.span(), format!("missing `{AXIS_ATTR}`"))
             })?,
             struct_name,
-            fields,
+            attributes,
         })
     }
 }
@@ -211,14 +212,13 @@ impl Parse for IncrementExpr {
     }
 }
 
-impl Parse for JoinOptionSpec {
+impl Parse for JoinSpec {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut source = None;
         let mut alias = None;
         let mut condition = None;
-        let mut by_index = false;
-        let mut required = false;
-        let mut zipped = false;
+        let mut lookup = JoinLookup::Predicate;
+        let mut requirement = JoinRequirement::Optional;
         let mut value = None;
 
         let starts_with_key = {
@@ -237,16 +237,16 @@ impl Parse for JoinOptionSpec {
             match key {
                 JoinKey::Left | JoinKey::From => source = Some(input.parse()?),
                 JoinKey::Must => {
-                    required = true;
+                    requirement = JoinRequirement::Required;
                     source = Some(input.parse()?);
                 }
                 JoinKey::Zip => {
-                    required = true;
-                    zipped = true;
+                    lookup = JoinLookup::Zip;
+                    requirement = JoinRequirement::Required;
                     source = Some(input.parse()?);
                 }
                 JoinKey::Index => {
-                    by_index = true;
+                    lookup = JoinLookup::Index;
                     source = Some(input.parse()?);
                 }
                 JoinKey::As | JoinKey::Alias => alias = Some(input.parse()?),
@@ -262,14 +262,13 @@ impl Parse for JoinOptionSpec {
         Ok(Self {
             source,
             alias,
-            condition: if by_index {
+            condition: if matches!(lookup, JoinLookup::Index) {
                 condition
             } else {
                 Some(condition.ok_or_else(|| input.error("missing join condition (`on = ...`)"))?)
             },
-            by_index,
-            required,
-            zipped,
+            lookup,
+            requirement,
             value,
         })
     }
@@ -284,33 +283,38 @@ fn parse_join_key(input: ParseStream<'_>) -> Result<JoinKey> {
     }
 }
 
-pub(crate) fn validate_rows(args: RowsArgs, module: RowsModule) -> Result<RowsBuildPlan> {
-    let rowsets = module
-        .rowsets
+pub(crate) fn validate_rows(args: RowViewArgs, module: SchemaModule) -> Result<DatabaseBuildPlan> {
+    let relations = module
+        .relations
         .iter()
         .enumerate()
-        .map(|(rowset_index, rowset)| validate_rowset_build_plan(rowset_index, rowset))
+        .map(|(relation_index, relation)| validate_relation_build_plan(relation_index, relation))
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(RowsBuildPlan {
+    Ok(DatabaseBuildPlan {
         args,
         module,
-        rowsets,
+        relations,
     })
 }
 
-fn validate_rowset_build_plan(rowset_index: usize, rowset: &RowsetSpec) -> Result<RowsetBuildPlan> {
-    let nested_axis = parse_nested_axis_expr(&rowset.axis);
+fn validate_relation_build_plan(
+    relation_index: usize,
+    relation: &RelationSchema,
+) -> Result<RelationBuildPlan> {
+    let nested_generator = parse_nested_axis_expr(&relation.generator);
     let joins = || {
-        rowset
-            .joins
-            .iter()
-            .chain(rowset.fields.iter().filter_map(|field| field.join.as_ref()))
+        relation.joins.iter().chain(
+            relation
+                .attributes
+                .iter()
+                .filter_map(|attribute| attribute.join.as_ref()),
+        )
     };
     let index_join_len_asserts = joins()
-        .filter(|join| join.by_index)
+        .filter(|join| join.is_index())
         .map(|join| {
-            Ok(IndexJoinLenAssertPlan {
+            Ok(IndexJoinCardinalityPlan {
                 source: join.source.clone().ok_or_else(|| {
                     syn::Error::new(Span::call_site(), "index join requires source")
                 })?,
@@ -319,7 +323,7 @@ fn validate_rowset_build_plan(rowset_index: usize, rowset: &RowsetSpec) -> Resul
         .collect::<Result<Vec<_>>>()?;
     let zip_join_key_asserts =
         joins()
-            .filter(|join| join.zipped)
+            .filter(|join| join.is_zip())
             .map(|join| {
                 let source = join.source.clone().ok_or_else(|| {
                     syn::Error::new(Span::call_site(), "zip join requires source")
@@ -327,20 +331,20 @@ fn validate_rowset_build_plan(rowset_index: usize, rowset: &RowsetSpec) -> Resul
                 let condition = join.condition.clone().ok_or_else(|| {
                     syn::Error::new_spanned(&source, "zip join requires `on = ...`")
                 })?;
-                Ok(ZipJoinKeyAssertPlan {
+                Ok(ZipJoinCoveragePlan {
                     source,
                     condition,
                     alias: join.alias.clone(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-    let row_joins = rowset
+    let row_joins = relation
         .joins
         .iter()
         .enumerate()
-        .filter(|(join_index, _)| rowset_selects_join(rowset, *join_index))
+        .filter(|(join_index, _)| relation_selects_join(relation, *join_index))
         .map(|(join_index, join)| {
-            Ok(RowJoinPlan {
+            Ok(RowJoinBindingPlan {
                 join_index,
                 binding: row_join_binding_ident(join_index),
                 join_axis: join_axis_for_expr(join, None)?,
@@ -348,21 +352,21 @@ fn validate_rowset_build_plan(rowset_index: usize, rowset: &RowsetSpec) -> Resul
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(RowsetBuildPlan {
-        rowset_index,
-        nested_axis,
+    Ok(RelationBuildPlan {
+        relation_index,
+        nested_generator,
         index_join_len_asserts,
         zip_join_key_asserts,
         row_joins,
     })
 }
 
-fn rowset_selects_join(rowset: &RowsetSpec, join_index: usize) -> bool {
-    rowset.fields.iter().any(|field| {
+fn relation_selects_join(relation: &RelationSchema, join_index: usize) -> bool {
+    relation.attributes.iter().any(|attribute| {
         matches!(
-            (&field.kind, &field.mode),
+            (&attribute.kind, &attribute.mode),
             (FieldKind::Select, FieldMode::Direct)
-        ) && select_join_for_expr_index(&field.expr, &rowset.joins)
+        ) && select_join_for_expr_index(&attribute.expr, &relation.joins)
             .is_some_and(|(selected_index, _)| selected_index == join_index)
     })
 }

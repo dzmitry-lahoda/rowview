@@ -1,3 +1,3 @@
 mod fin;
-mod god;
 mod game;
+mod god;
