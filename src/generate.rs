@@ -1,7 +1,12 @@
 use crate::docs::{
-    AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, ROOT_ATTR, ROWS_SUFFIX,
+    AXIS_ATTR, FieldKind, FieldMode, INCREMENT_BINDING_PREFIX, ITEM_ATTR, KEY_ATTR, ROOT_ATTR,
+    ROWS_SUFFIX,
 };
-use crate::schema::{DatabaseBuildPlan, JoinSpec, NestedAxisPlan, RowJoinBindingPlan};
+use crate::schema::{
+    BindingFilter, BindingLookup, BindingSpec, DatabaseBuildPlan, JoinSpec, NestedAxisPlan,
+    RowExistencePlan, RowJoinBindingPlan, SupportSpec,
+};
+use crate::solve::parse_join_axis_expr;
 use heck::ToUpperCamelCase;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
@@ -47,46 +52,11 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
     let builders = plan.relations.iter().map(|relation_plan| -> Result<_> {
         let relation = &module.relations[relation_plan.relation_index];
         let relation_name = &relation.relation_name;
-        let nested_generator = relation_plan.nested_generator.as_ref();
-        let generator_iter = rewrite_axis_iter_expr(&relation.generator, nested_generator);
+        let nested_generator = match &relation_plan.row_existence {
+            RowExistencePlan::Axis(axis) => axis.nested.as_ref(),
+            RowExistencePlan::Support(_) => None,
+        };
         let relation_joins = &relation.joins;
-        let index_join_len_asserts = relation_plan
-            .index_join_len_asserts
-            .iter()
-            .map(|index_assert| {
-                let generator = rewrite_source_expr(&relation.generator, ROOT_ATTR, quote! { self });
-                let join_source = rewrite_source_expr(&index_assert.source, ROOT_ATTR, quote! { self });
-                quote! {
-                    assert_eq!(
-                        (#generator).len(),
-                        (#join_source).len(),
-                        "rowview index join requires axis and joined collection lengths to match"
-                    );
-                }
-            })
-            .collect::<Vec<_>>();
-        let zip_join_key_asserts = relation_plan
-            .zip_join_key_asserts
-            .iter()
-            .map(|zip_assert| {
-                let join_iter = rewrite_source_expr(&zip_assert.source, ROOT_ATTR, quote! { self });
-                let generator_iter = rewrite_axis_iter_expr(&relation.generator, nested_generator);
-                let condition = rewrite_join_context_expr(
-                    &zip_assert.condition,
-                    nested_generator,
-                    &zip_assert.source,
-                    zip_assert.alias.as_ref(),
-                );
-                quote! {
-                    assert!(
-                        (#join_iter)
-                            .iter()
-                            .all(|join_item| (#generator_iter).any(|(generator_parent, generator_item)| #condition)),
-                        "rowview zip join found joined item with no matching axis item"
-                    );
-                }
-            })
-            .collect::<Vec<_>>();
         let struct_name = &relation.struct_name;
         let qualified_struct_name = quote! { #module_name::#struct_name };
         let increment_bindings = relation.attributes.iter().filter_map(|attribute| {
@@ -104,6 +74,9 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
             let value = match (&attribute.kind, &attribute.mode) {
                 (FieldKind::Copy, FieldMode::Direct) | (FieldKind::FromAxis, FieldMode::Direct) => {
                     rewrite_row_expr(&attribute.expr, nested_generator)
+                }
+                (FieldKind::FromKey, FieldMode::Direct) => {
+                    rewrite_support_key_expr(&attribute.expr)
                 }
                 (FieldKind::Agg, FieldMode::Direct) => {
                     let ty = &attribute.ty;
@@ -125,14 +98,29 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
                     rewrite_join_expr(attribute.join.as_ref().expect("join field has spec"), nested_generator)?
                 }
                 (FieldKind::Select, FieldMode::Direct) => {
-                    let (join_index, _) = select_join_for_expr_index(&attribute.expr, relation_joins)
-                        .ok_or_else(|| syn::Error::new_spanned(&attribute.expr, "select field requires a matching row-level `#[joins(...)]`"))?;
-                    let row_join_plan = relation_plan
-                        .row_joins
-                        .iter()
-                        .find(|row_join| row_join.join_index == join_index)
-                        .ok_or_else(|| syn::Error::new_spanned(&attribute.expr, "select field requires a planned row-level join"))?;
-                    rewrite_join_select_expr(&relation_joins[join_index], &attribute.expr, nested_generator, Some(&row_join_plan.binding))?
+                    if let Some((binding_index, _)) =
+                        select_binding_for_expr_index(&attribute.expr, &relation.bindings)
+                    {
+                        let binding_plan = relation_plan
+                            .support_bindings
+                            .iter()
+                            .find(|binding_plan| binding_plan.binding_index == binding_index)
+                            .ok_or_else(|| syn::Error::new_spanned(&attribute.expr, "select field requires a planned support binding"))?;
+                        rewrite_binding_select_expr(
+                            &relation.bindings[binding_index],
+                            &attribute.expr,
+                            Some(&binding_plan.binding),
+                        )
+                    } else {
+                        let (join_index, _) = select_join_for_expr_index(&attribute.expr, relation_joins)
+                            .ok_or_else(|| syn::Error::new_spanned(&attribute.expr, "select field requires a matching row-level `#[joins(...)]` or `#[bind(...)]`"))?;
+                        let row_join_plan = relation_plan
+                            .row_joins
+                            .iter()
+                            .find(|row_join| row_join.join_index == join_index)
+                            .ok_or_else(|| syn::Error::new_spanned(&attribute.expr, "select field requires a planned row-level join"))?;
+                        rewrite_join_select_expr(&relation_joins[join_index], &attribute.expr, nested_generator, Some(&row_join_plan.binding))?
+                    }
                 }
                 (FieldKind::Copy, FieldMode::Increment) => {
                     let binding = format_ident!("{INCREMENT_BINDING_PREFIX}{}", attribute.name);
@@ -142,7 +130,7 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
                         value
                     }}
                 }
-                (FieldKind::Agg | FieldKind::FromAxis | FieldKind::FromIndex | FieldKind::Join | FieldKind::Select, FieldMode::Increment) => unreachable!(),
+                (FieldKind::Agg | FieldKind::FromAxis | FieldKind::FromIndex | FieldKind::FromKey | FieldKind::Join | FieldKind::Select, FieldMode::Increment) => unreachable!(),
             };
             Ok(quote! { #name: #value })
         }).collect::<Result<Vec<_>>>()?;
@@ -152,29 +140,110 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
                 rewrite_row_join_plan(row_join, &relation_joins[row_join.join_index], nested_generator)
             })
             .collect::<Result<Vec<_>>>()?;
+        let skip_row_when_missing = relation_plan
+            .row_joins
+            .iter()
+            .filter(|row_join| relation_joins[row_join.join_index].skips_row_on_miss())
+            .map(|row_join| {
+                let binding = &row_join.binding;
+                quote! {
+                    if #binding.is_none() {
+                        return ::core::option::Option::None;
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
 
-        let relation_values = if matches!(&relation.generator, Expr::Tuple(tuple) if tuple.elems.is_empty()) {
-            quote! {
-                {
-                    #( #increment_bindings )*
-                    ::std::iter::once(#qualified_struct_name {
-                        #( #field_inits, )*
-                    }).collect()
+        let relation_values = match &relation_plan.row_existence {
+            RowExistencePlan::Axis(axis_plan) if matches!(&axis_plan.source, Expr::Tuple(tuple) if tuple.elems.is_empty()) => {
+                quote! {
+                    {
+                        #( #increment_bindings )*
+                        ::std::iter::once(#qualified_struct_name {
+                            #( #field_inits, )*
+                        }).collect()
+                    }
                 }
             }
-        } else {
-            quote! {
-                {
-                    #( #index_join_len_asserts )*
-                    #( #zip_join_key_asserts )*
-                    #( #increment_bindings )*
-                    #generator_iter.enumerate().map(|(generator_index, generator_item)| {
-                        let (generator_parent, generator_item) = generator_item;
-                        #( #row_join_bindings )*
-                        #qualified_struct_name {
-                            #( #field_inits, )*
+            RowExistencePlan::Axis(axis_plan) => {
+                let axis = &axis_plan.source;
+                let generator_iter = rewrite_axis_iter_expr(axis, nested_generator);
+                let index_join_len_asserts = relation_plan
+                    .index_join_len_asserts
+                    .iter()
+                    .map(|index_assert| {
+                        let generator = rewrite_source_expr(axis, ROOT_ATTR, quote! { self });
+                        let join_source = rewrite_source_expr(&index_assert.source, ROOT_ATTR, quote! { self });
+                        quote! {
+                            assert_eq!(
+                                (#generator).len(),
+                                (#join_source).len(),
+                                "rowview index join requires axis and joined collection lengths to match"
+                            );
                         }
-                    }).collect()
+                    })
+                    .collect::<Vec<_>>();
+                let zip_join_key_asserts = relation_plan
+                    .zip_join_key_asserts
+                    .iter()
+                    .map(|zip_assert| {
+                        let join_iter = rewrite_source_expr(&zip_assert.source, ROOT_ATTR, quote! { self });
+                        let generator_iter = rewrite_axis_iter_expr(axis, nested_generator);
+                        let condition = rewrite_join_context_expr(
+                            &zip_assert.condition,
+                            nested_generator,
+                            &zip_assert.source,
+                            zip_assert.alias.as_ref(),
+                        );
+                        quote! {
+                            assert!(
+                                (#join_iter)
+                                    .iter()
+                                    .all(|join_item| (#generator_iter).any(|(generator_parent, generator_item)| #condition)),
+                                "rowview zip join found joined item with no matching axis item"
+                            );
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                quote! {
+                    {
+                        #( #index_join_len_asserts )*
+                        #( #zip_join_key_asserts )*
+                        #( #increment_bindings )*
+                        #generator_iter.enumerate().filter_map(|(generator_index, generator_item)| {
+                            let (generator_parent, generator_item) = generator_item;
+                            #( #row_join_bindings )*
+                            #( #skip_row_when_missing )*
+                            ::core::option::Option::Some(#qualified_struct_name {
+                                #( #field_inits, )*
+                            })
+                        }).collect()
+                    }
+                }
+            }
+            RowExistencePlan::Support(support_plan) => {
+                let support_key_pushes = rewrite_support_key_pushes(&support_plan.support);
+                let support_bindings = relation_plan.support_bindings
+                    .iter()
+                    .map(|binding_plan| {
+                        rewrite_support_binding_plan(
+                            &relation.bindings[binding_plan.binding_index],
+                            &binding_plan.binding,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                quote! {
+                    {
+                        let mut support_keys = ::std::vec::Vec::new();
+                        #( #support_key_pushes )*
+                        #( #increment_bindings )*
+                        support_keys.iter().enumerate().map(|(generator_index, support_key)| {
+                            #( #support_bindings )*
+                            #qualified_struct_name {
+                                #( #field_inits, )*
+                            }
+                        }).collect()
+                    }
                 }
             }
         };
@@ -224,18 +293,6 @@ fn rewrite_axis_iter_expr(
         let generator = rewrite_source_expr(expr, ROOT_ATTR, quote! { self });
         quote! { (#generator).iter().map(|generator_item| { ((), generator_item) }) }
     }
-}
-
-pub(crate) fn parse_nested_axis_expr(expr: &Expr) -> Option<NestedAxisPlan> {
-    let Expr::Field(attribute) = expr else {
-        return None;
-    };
-    let index = field_range_index(attribute)?;
-
-    Some(NestedAxisPlan {
-        parent: (*index.expr).clone(),
-        child: clone_member(&attribute.member),
-    })
 }
 
 fn rewrite_nested_axis_iter_expr(
@@ -312,6 +369,76 @@ pub(crate) fn row_join_binding_ident(join_index: usize) -> Ident {
     format_ident!("__rowview_join_{join_index}")
 }
 
+fn rewrite_support_key_pushes(support: &SupportSpec) -> Vec<proc_macro2::TokenStream> {
+    support
+        .sources
+        .iter()
+        .map(|source| {
+            let source_expr = rewrite_source_expr(&source.source, ROOT_ATTR, quote! { self });
+            let key_expr = rewrite_support_item_expr(&source.key, &source.source);
+            quote! {
+                for support_item in (#source_expr).iter() {
+                    let candidate_key = #key_expr;
+                    if !support_keys.iter().any(|support_key| *support_key == candidate_key) {
+                        support_keys.push(candidate_key);
+                    }
+                }
+            }
+        })
+        .collect()
+}
+
+fn rewrite_support_item_expr(expr: &Expr, support_source: &Expr) -> proc_macro2::TokenStream {
+    let rewritten = rewrite_collection_item_expr(expr, support_source, quote! { support_item })
+        .unwrap_or_else(|| quote! { #expr });
+    let rewritten = syn::parse2(rewritten).expect("rewritten expression remains valid");
+    rewrite_context_expr(&rewritten, &[(ITEM_ATTR, quote! { support_item })])
+}
+
+fn rewrite_support_binding_plan(
+    binding: &BindingSpec,
+    binding_ident: &Ident,
+) -> Result<proc_macro2::TokenStream> {
+    let source = rewrite_source_expr(&binding.source, ROOT_ATTR, quote! { self });
+    let key_condition = match &binding.lookup {
+        BindingLookup::Key { expr } => {
+            let key = rewrite_binding_item_expr(expr, &binding.alias);
+            quote! { #key == *support_key }
+        }
+    };
+    let filter_condition = binding
+        .filter
+        .as_ref()
+        .map(rewrite_binding_filter_expr)
+        .unwrap_or_else(|| quote! { true });
+    let condition = quote! { (#key_condition) && (#filter_condition) };
+
+    Ok(quote! {
+        let #binding_ident = (#source)
+            .iter()
+            .filter(|bind_item| #condition)
+            .last();
+    })
+}
+
+fn rewrite_binding_filter_expr(filter: &BindingFilter) -> proc_macro2::TokenStream {
+    match filter {
+        BindingFilter::Some(alias) => quote! { #alias.is_some() },
+        BindingFilter::Any(filters) => {
+            let filters = filters.iter().map(rewrite_binding_filter_expr);
+            quote! { false #( || (#filters) )* }
+        }
+        BindingFilter::All(filters) => {
+            let filters = filters.iter().map(rewrite_binding_filter_expr);
+            quote! { true #( && (#filters) )* }
+        }
+        BindingFilter::Not(filter) => {
+            let filter = rewrite_binding_filter_expr(filter);
+            quote! { !(#filter) }
+        }
+    }
+}
+
 fn rewrite_agg_sum_iter_expr(
     values: proc_macro2::TokenStream,
     ty: &syn::Type,
@@ -380,6 +507,22 @@ fn rewrite_join_agg_sum_expr(
     })
 }
 
+fn rewrite_support_key_expr(expr: &Expr) -> proc_macro2::TokenStream {
+    rewrite_context_expr(expr, &[(KEY_ATTR, quote! { *support_key })])
+}
+
+fn rewrite_binding_select_expr(
+    binding: &BindingSpec,
+    value_expr: &Expr,
+    binding_ident: Option<&Ident>,
+) -> proc_macro2::TokenStream {
+    let binding_ident = binding_ident.unwrap_or(&binding.alias);
+    let value = rewrite_binding_value_expr(value_expr, &binding.alias);
+    quote! {
+        (#binding_ident).and_then(|bind_item| ::core::option::Option::Some(#value))
+    }
+}
+
 fn rewrite_join_lookup_expr(
     join: &JoinSpec,
     join_axis: &Expr,
@@ -406,6 +549,17 @@ fn rewrite_join_lookup_expr(
     Ok(quote! {
         (#join_source).iter().filter(|join_item| #condition).last()
     })
+}
+
+fn rewrite_binding_value_expr(expr: &Expr, binding_alias: &Ident) -> proc_macro2::TokenStream {
+    let rewritten = rewrite_binding_item_expr(expr, binding_alias);
+    rewrite_context_expr(&rewritten, &[(KEY_ATTR, quote! { *support_key })])
+}
+
+fn rewrite_binding_item_expr(expr: &Expr, binding_alias: &Ident) -> Expr {
+    let rewritten = rewrite_expr(expr, &binding_alias.to_string(), &quote! { bind_item })
+        .unwrap_or_else(|| expr.clone());
+    syn::parse2(quote! { #rewritten }).expect("rewritten expression remains valid")
 }
 
 fn rewrite_row_join_plan(
@@ -443,18 +597,24 @@ fn rewrite_join_select_expr(
         rewrite_join_lookup_expr(join, &join_axis, nested_generator)?
     };
 
-    Ok(rewrite_join_select_value(lookup, value, join.is_required()))
+    Ok(rewrite_join_select_value(
+        lookup,
+        value,
+        join.panics_on_miss(),
+        join.skips_row_on_miss(),
+    ))
 }
 
 fn rewrite_join_select_value(
     lookup: proc_macro2::TokenStream,
     value: proc_macro2::TokenStream,
-    required: bool,
+    panics_on_miss: bool,
+    skips_row_on_miss: bool,
 ) -> proc_macro2::TokenStream {
     let selected = quote! {
         (#lookup).and_then(|join_item| ::core::option::Option::Some(#value))
     };
-    if required {
+    if panics_on_miss || skips_row_on_miss {
         quote! { #selected.expect("rowview must join found no matching item") }
     } else {
         selected
@@ -557,6 +717,19 @@ fn select_join_for_expr<'a>(expr: &Expr, joins: &'a [JoinSpec]) -> Option<&'a Jo
     select_join_for_expr_index(expr, joins).map(|(_, join)| join)
 }
 
+pub(crate) fn select_binding_for_expr_index<'a>(
+    expr: &Expr,
+    bindings: &'a [BindingSpec],
+) -> Option<(usize, &'a BindingSpec)> {
+    match bindings {
+        [binding] => Some((0, binding)),
+        bindings => bindings
+            .iter()
+            .enumerate()
+            .find(|(_, binding)| expr_mentions_ident(expr, &binding.alias)),
+    }
+}
+
 pub(crate) fn select_join_for_expr_index<'a>(
     expr: &Expr,
     joins: &'a [JoinSpec],
@@ -612,26 +785,6 @@ fn rewrite_join_context_expr(
     rewrite_row_expr(&rewritten, nested_generator)
 }
 
-fn parse_join_axis_expr(expr: &Expr) -> Option<Expr> {
-    match expr {
-        Expr::Field(attribute) => parse_join_axis_field_expr(attribute),
-        Expr::Binary(binary) => {
-            parse_join_axis_expr(&binary.left).or_else(|| parse_join_axis_expr(&binary.right))
-        }
-        Expr::Paren(paren) => parse_join_axis_expr(&paren.expr),
-        Expr::Reference(reference) => parse_join_axis_expr(&reference.expr),
-        Expr::Unary(unary) => parse_join_axis_expr(&unary.expr),
-        Expr::Group(group) => parse_join_axis_expr(&group.expr),
-        _ => None,
-    }
-}
-
-fn parse_join_axis_field_expr(attribute: &ExprField) -> Option<Expr> {
-    field_range_index(attribute)
-        .map(|index| (*index.expr).clone())
-        .or_else(|| parse_join_axis_expr(&attribute.base))
-}
-
 fn rewrite_join_item_expr(
     expr: &Expr,
     join_axis: &Expr,
@@ -639,8 +792,8 @@ fn rewrite_join_item_expr(
 ) -> Option<proc_macro2::TokenStream> {
     match expr {
         Expr::Field(attribute) => parse_join_binding_member_expr(attribute, join_alias)
-            .or_else(|| parse_join_member_expr(attribute, join_axis))
             .map(|member| quote! { join_item.#member })
+            .or_else(|| rewrite_collection_item_expr(expr, join_axis, quote! { join_item }))
             .or_else(|| {
                 let base = rewrite_join_item_expr(&attribute.base, join_axis, join_alias)?;
                 let member = clone_member(&attribute.member);
@@ -691,11 +844,22 @@ fn parse_join_binding_member_expr(
     .then(|| clone_member(&attribute.member))
 }
 
-fn parse_join_member_expr(attribute: &ExprField, join_axis: &Expr) -> Option<Member> {
+fn rewrite_collection_item_expr(
+    expr: &Expr,
+    collection: &Expr,
+    item: proc_macro2::TokenStream,
+) -> Option<proc_macro2::TokenStream> {
+    let Expr::Field(attribute) = expr else {
+        return None;
+    };
     let index = field_range_index(attribute)?;
     let requested = rewrite_source_expr(&index.expr, ROOT_ATTR, quote! { self });
-    let expected = rewrite_source_expr(join_axis, ROOT_ATTR, quote! { self });
-    (requested.to_string() == expected.to_string()).then(|| clone_member(&attribute.member))
+    let expected = rewrite_source_expr(collection, ROOT_ATTR, quote! { self });
+    if requested.to_string() != expected.to_string() {
+        return None;
+    }
+    let member = clone_member(&attribute.member);
+    Some(quote! { #item.#member })
 }
 
 fn rewrite_context_expr(

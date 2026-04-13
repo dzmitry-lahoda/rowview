@@ -2,6 +2,7 @@ mod docs;
 mod generate;
 mod parse;
 mod schema;
+mod solve;
 
 use proc_macro::TokenStream;
 use syn::parse_macro_input;

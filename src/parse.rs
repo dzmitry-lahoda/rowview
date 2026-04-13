@@ -1,11 +1,10 @@
-use crate::docs::{AXIS_ATTR, FieldKind, FieldMode, JoinKey, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR};
-use crate::generate::{
-    join_axis_for_expr, parse_nested_axis_expr, row_join_binding_ident, select_join_for_expr_index,
+use crate::docs::{
+    AXIS_ATTR, BIND_ATTR, FieldKind, FieldMode, JoinKey, NAME_ATTR, ROOT_ATTR, ROWSET_ATTR,
+    SUPPORT_ATTR,
 };
 use crate::schema::{
-    AttributeSpec, DatabaseBuildPlan, IncrementExpr, IndexJoinCardinalityPlan, JoinLookup,
-    JoinRequirement, JoinSpec, RelationBuildPlan, RelationSchema, RowJoinBindingPlan, RowViewArgs,
-    SchemaModule, ZipJoinCoveragePlan,
+    AttributeSpec, DatabaseBuildPlan, IncrementExpr, JoinLookup, JoinMiss, JoinSpec,
+    RelationGenerator, RelationSchema, RowViewArgs, SchemaModule,
 };
 use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
@@ -121,6 +120,10 @@ impl RelationSchema {
                     kind = Some(FieldKind::FromIndex);
                     expr = Some(attr.parse_args()?);
                 }
+                if attr.path().is_ident(FieldKind::FromKey.as_ref()) {
+                    kind = Some(FieldKind::FromKey);
+                    expr = Some(attr.parse_args()?);
+                }
                 if attr.path().is_ident(FieldKind::Join.as_ref()) {
                     kind = Some(FieldKind::Join);
                     let spec = attr.parse_args::<JoinSpec>()?;
@@ -156,7 +159,9 @@ impl RelationSchema {
 
         let mut relation_name = None;
         let mut generator = None;
+        let mut support = None;
         let mut joins = Vec::new();
+        let mut bindings = Vec::new();
         let mut row_attrs = Vec::new();
         for attr in rust_attributes {
             if attr.path().is_ident(ROWSET_ATTR) {
@@ -171,6 +176,10 @@ impl RelationSchema {
                     }
                     Err(meta.error("unsupported relation attribute"))
                 })?;
+            } else if attr.path().is_ident(SUPPORT_ATTR) {
+                support = Some(attr.parse_args()?);
+            } else if attr.path().is_ident(BIND_ATTR) {
+                bindings.push(attr.parse_args()?);
             } else if attr.path().is_ident("joins") {
                 joins.push(attr.parse_args()?);
             } else {
@@ -178,15 +187,31 @@ impl RelationSchema {
             }
         }
 
+        let generator = match (generator, support) {
+            (Some(axis), None) => RelationGenerator::Axis(axis),
+            (None, Some(support)) => RelationGenerator::Support(support),
+            (Some(_), Some(_)) => {
+                return Err(syn::Error::new(
+                    struct_name.span(),
+                    "use either `axis = ...` or `#[support(...)]`, not both",
+                ));
+            }
+            (None, None) => {
+                return Err(syn::Error::new(
+                    struct_name.span(),
+                    format!("missing `{AXIS_ATTR}` or `#[{SUPPORT_ATTR}(...)]`"),
+                ));
+            }
+        };
+
         Ok(Self {
             rust_attributes: row_attrs,
             joins,
+            bindings,
             relation_name: relation_name.ok_or_else(|| {
                 syn::Error::new(struct_name.span(), format!("missing `{NAME_ATTR}`"))
             })?,
-            generator: generator.ok_or_else(|| {
-                syn::Error::new(struct_name.span(), format!("missing `{AXIS_ATTR}`"))
-            })?,
+            generator,
             struct_name,
             attributes,
         })
@@ -218,7 +243,7 @@ impl Parse for JoinSpec {
         let mut alias = None;
         let mut condition = None;
         let mut lookup = JoinLookup::Predicate;
-        let mut requirement = JoinRequirement::Optional;
+        let mut miss = JoinMiss::ProjectNone;
         let mut value = None;
 
         let starts_with_key = {
@@ -237,12 +262,16 @@ impl Parse for JoinSpec {
             match key {
                 JoinKey::Left | JoinKey::From => source = Some(input.parse()?),
                 JoinKey::Must => {
-                    requirement = JoinRequirement::Required;
+                    miss = JoinMiss::Panic;
+                    source = Some(input.parse()?);
+                }
+                JoinKey::Inner => {
+                    miss = JoinMiss::SkipRow;
                     source = Some(input.parse()?);
                 }
                 JoinKey::Zip => {
                     lookup = JoinLookup::Zip;
-                    requirement = JoinRequirement::Required;
+                    miss = JoinMiss::Panic;
                     source = Some(input.parse()?);
                 }
                 JoinKey::Index => {
@@ -252,6 +281,12 @@ impl Parse for JoinSpec {
                 JoinKey::As | JoinKey::Alias => alias = Some(input.parse()?),
                 JoinKey::Option | JoinKey::On => condition = Some(input.parse()?),
                 JoinKey::Value | JoinKey::Select => value = Some(input.parse()?),
+                JoinKey::By => {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "`by` is only supported in `#[bind(...)]`",
+                    ));
+                }
             }
             if input.is_empty() {
                 break;
@@ -268,13 +303,13 @@ impl Parse for JoinSpec {
                 Some(condition.ok_or_else(|| input.error("missing join condition (`on = ...`)"))?)
             },
             lookup,
-            requirement,
+            miss,
             value,
         })
     }
 }
 
-fn parse_join_key(input: ParseStream<'_>) -> Result<JoinKey> {
+pub(crate) fn parse_join_key(input: ParseStream<'_>) -> Result<JoinKey> {
     if input.peek(Token![as]) {
         input.parse::<Token![as]>()?;
         Ok(JoinKey::As)
@@ -284,89 +319,11 @@ fn parse_join_key(input: ParseStream<'_>) -> Result<JoinKey> {
 }
 
 pub(crate) fn validate_rows(args: RowViewArgs, module: SchemaModule) -> Result<DatabaseBuildPlan> {
-    let relations = module
-        .relations
-        .iter()
-        .enumerate()
-        .map(|(relation_index, relation)| validate_relation_build_plan(relation_index, relation))
-        .collect::<Result<Vec<_>>>()?;
+    let relations = crate::solve::validate_relations(&module)?;
 
     Ok(DatabaseBuildPlan {
         args,
         module,
         relations,
-    })
-}
-
-fn validate_relation_build_plan(
-    relation_index: usize,
-    relation: &RelationSchema,
-) -> Result<RelationBuildPlan> {
-    let nested_generator = parse_nested_axis_expr(&relation.generator);
-    let joins = || {
-        relation.joins.iter().chain(
-            relation
-                .attributes
-                .iter()
-                .filter_map(|attribute| attribute.join.as_ref()),
-        )
-    };
-    let index_join_len_asserts = joins()
-        .filter(|join| join.is_index())
-        .map(|join| {
-            Ok(IndexJoinCardinalityPlan {
-                source: join.source.clone().ok_or_else(|| {
-                    syn::Error::new(Span::call_site(), "index join requires source")
-                })?,
-            })
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let zip_join_key_asserts =
-        joins()
-            .filter(|join| join.is_zip())
-            .map(|join| {
-                let source = join.source.clone().ok_or_else(|| {
-                    syn::Error::new(Span::call_site(), "zip join requires source")
-                })?;
-                let condition = join.condition.clone().ok_or_else(|| {
-                    syn::Error::new_spanned(&source, "zip join requires `on = ...`")
-                })?;
-                Ok(ZipJoinCoveragePlan {
-                    source,
-                    condition,
-                    alias: join.alias.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-    let row_joins = relation
-        .joins
-        .iter()
-        .enumerate()
-        .filter(|(join_index, _)| relation_selects_join(relation, *join_index))
-        .map(|(join_index, join)| {
-            Ok(RowJoinBindingPlan {
-                join_index,
-                binding: row_join_binding_ident(join_index),
-                join_axis: join_axis_for_expr(join, None)?,
-            })
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    Ok(RelationBuildPlan {
-        relation_index,
-        nested_generator,
-        index_join_len_asserts,
-        zip_join_key_asserts,
-        row_joins,
-    })
-}
-
-fn relation_selects_join(relation: &RelationSchema, join_index: usize) -> bool {
-    relation.attributes.iter().any(|attribute| {
-        matches!(
-            (&attribute.kind, &attribute.mode),
-            (FieldKind::Select, FieldMode::Direct)
-        ) && select_join_for_expr_index(&attribute.expr, &relation.joins)
-            .is_some_and(|(selected_index, _)| selected_index == join_index)
     })
 }

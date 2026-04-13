@@ -23,8 +23,9 @@ pub(super) struct DatabaseBuildPlan {
 pub(super) struct RelationSchema {
     pub(super) rust_attributes: Vec<Attribute>,
     pub(super) joins: Vec<JoinSpec>,
+    pub(super) bindings: Vec<BindingSpec>,
     pub(super) relation_name: Ident,
-    pub(super) generator: Expr,
+    pub(super) generator: RelationGenerator,
     pub(super) struct_name: Ident,
     pub(super) attributes: Vec<AttributeSpec>,
 }
@@ -48,8 +49,42 @@ pub(super) struct JoinSpec {
     pub(super) alias: Option<Ident>,
     pub(super) condition: Option<Expr>,
     pub(super) lookup: JoinLookup,
-    pub(super) requirement: JoinRequirement,
+    pub(super) miss: JoinMiss,
     pub(super) value: Option<Expr>,
+}
+
+pub(super) enum RelationGenerator {
+    Axis(Expr),
+    Support(SupportSpec),
+}
+
+#[derive(Clone)]
+pub(super) struct SupportSpec {
+    pub(super) sources: Vec<SupportSourceSpec>,
+}
+
+#[derive(Clone)]
+pub(super) struct SupportSourceSpec {
+    pub(super) source: Expr,
+    pub(super) key: Expr,
+}
+
+pub(super) struct BindingSpec {
+    pub(super) source: Expr,
+    pub(super) alias: Ident,
+    pub(super) lookup: BindingLookup,
+    pub(super) filter: Option<BindingFilter>,
+}
+
+pub(super) enum BindingLookup {
+    Key { expr: Expr },
+}
+
+pub(super) enum BindingFilter {
+    Some(Ident),
+    Any(Vec<BindingFilter>),
+    All(Vec<BindingFilter>),
+    Not(Box<BindingFilter>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,9 +95,10 @@ pub(super) enum JoinLookup {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum JoinRequirement {
-    Optional,
-    Required,
+pub(super) enum JoinMiss {
+    ProjectNone,
+    Panic,
+    SkipRow,
 }
 
 impl JoinSpec {
@@ -74,17 +110,41 @@ impl JoinSpec {
         matches!(self.lookup, JoinLookup::Zip)
     }
 
-    pub(super) fn is_required(&self) -> bool {
-        matches!(self.requirement, JoinRequirement::Required)
+    pub(super) fn panics_on_miss(&self) -> bool {
+        matches!(self.miss, JoinMiss::Panic)
+    }
+
+    pub(super) fn skips_row_on_miss(&self) -> bool {
+        matches!(self.miss, JoinMiss::SkipRow)
     }
 }
 
 pub(super) struct RelationBuildPlan {
     pub(super) relation_index: usize,
-    pub(super) nested_generator: Option<NestedAxisPlan>,
+    pub(super) row_existence: RowExistencePlan,
+    pub(super) support_bindings: Vec<SupportBindingPlan>,
     pub(super) index_join_len_asserts: Vec<IndexJoinCardinalityPlan>,
     pub(super) zip_join_key_asserts: Vec<ZipJoinCoveragePlan>,
     pub(super) row_joins: Vec<RowJoinBindingPlan>,
+}
+
+pub(super) enum RowExistencePlan {
+    Axis(AxisExistencePlan),
+    Support(SupportExistencePlan),
+}
+
+pub(super) struct AxisExistencePlan {
+    pub(super) source: Expr,
+    pub(super) nested: Option<NestedAxisPlan>,
+}
+
+pub(super) struct SupportExistencePlan {
+    pub(super) support: SupportSpec,
+}
+
+pub(super) struct SupportBindingPlan {
+    pub(super) binding_index: usize,
+    pub(super) binding: Ident,
 }
 
 pub(super) struct IndexJoinCardinalityPlan {

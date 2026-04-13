@@ -2,8 +2,12 @@
 
 pub const ROOT_ATTR: &str = "root";
 pub const ROWSET_ATTR: &str = "rowset";
+pub const SUPPORT_ATTR: &str = "support";
+pub const BIND_ATTR: &str = "bind";
 pub const NAME_ATTR: &str = "name";
 pub const AXIS_ATTR: &str = "axis";
+pub const KEY_ATTR: &str = "key";
+pub const ITEM_ATTR: &str = "item";
 pub const INCREMENT_BINDING_PREFIX: &str = "__rowview_increment_";
 pub const ROWS_SUFFIX: &str = "Rows";
 
@@ -15,6 +19,7 @@ pub enum FieldKind {
     Copy,
     FromAxis,
     FromIndex,
+    FromKey,
     Join,
     Select,
 }
@@ -34,6 +39,7 @@ pub enum JoinKey {
     Left,
     From,
     Must,
+    Inner,
     Zip,
     Index,
     As,
@@ -42,6 +48,7 @@ pub enum JoinKey {
     On,
     Value,
     Select,
+    By,
 }
 
 impl TryFrom<proc_macro2::Ident> for JoinKey {
