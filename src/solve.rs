@@ -143,6 +143,16 @@ fn validate_row_existence_consistency(relation: &RelationSchema) -> Result<()> {
                     "`#[support(any(...))]` requires at least one source",
                 ));
             }
+            if !relation
+                .attributes
+                .iter()
+                .any(|attribute| matches!(attribute.kind, FieldKind::FromKey))
+            {
+                return Err(syn::Error::new(
+                    relation.relation_name.span(),
+                    "support relations must expose the support key with `#[from_key(key)]`",
+                ));
+            }
             if !relation.joins.is_empty()
                 || relation
                     .attributes
