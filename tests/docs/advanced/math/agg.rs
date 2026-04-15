@@ -29,12 +29,12 @@ fn sum_over_left_join() {
     .abcs;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].a, 1);
-    assert_eq!(rows[0].b_sum, 30);
-    assert_eq!(rows[1].a, 2);
-    assert_eq!(rows[1].b_sum, 0);
-    assert_eq!(rows[2].a, 3);
-    assert_eq!(rows[2].b_sum, 7);
+    assert_eq!(rows.a[0], 1);
+    assert_eq!(rows.b_sum[0], 30);
+    assert_eq!(rows.a[1], 2);
+    assert_eq!(rows.b_sum[1], 0);
+    assert_eq!(rows.a[2], 3);
+    assert_eq!(rows.b_sum[2], 7);
 }
 
 #[test]
@@ -64,10 +64,10 @@ fn sum_over_hash_map_left_join() {
     .abcs;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].a, 1);
-    assert_eq!(rows[0].b_sum, 30);
-    assert_eq!(rows[1].a, 2);
-    assert_eq!(rows[1].b_sum, 0);
-    assert_eq!(rows[2].a, 3);
-    assert_eq!(rows[2].b_sum, 7);
+    assert_eq!(rows.a[0], 1);
+    assert_eq!(rows.b_sum[0], 30);
+    assert_eq!(rows.a[1], 2);
+    assert_eq!(rows.b_sum[1], 0);
+    assert_eq!(rows.a[2], 3);
+    assert_eq!(rows.b_sum[2], 7);
 }

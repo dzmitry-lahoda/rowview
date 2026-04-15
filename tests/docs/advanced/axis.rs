@@ -40,7 +40,7 @@ fn custom_map_wrapper_can_be_axis() {
     };
 
     let rows = root.to_rows().axis_rows;
-    let mut pairs: Vec<_> = rows.into_iter().map(|row| (row.id, row.value)).collect();
+    let mut pairs: Vec<_> = rows.iter().map(|row| (*row.id, *row.value)).collect();
     pairs.sort_unstable();
 
     assert_eq!(pairs, vec![(1, 10), (2, 20), (3, 30)]);
@@ -83,12 +83,12 @@ fn nested_axis() {
     let rows = root.to_rows().axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].ad, 10.0);
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].ad, 20.0);
-    assert_eq!(rows[2].id, 3);
-    assert_eq!(rows[2].ad, 30.0);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.ad[0], 10.0);
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.ad[1], 20.0);
+    assert_eq!(rows.id[2], 3);
+    assert_eq!(rows.ad[2], 30.0);
 }
 
 #[test]
@@ -138,18 +138,18 @@ fn nested_with_parent_copies() {
     let rows = root.to_rows().axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].root_value, -7);
-    assert_eq!(rows[0].parent_value, 100);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].ad, 10.0);
-    assert_eq!(rows[1].root_value, -7);
-    assert_eq!(rows[1].parent_value, 100);
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].ad, 20.0);
-    assert_eq!(rows[2].root_value, -7);
-    assert_eq!(rows[2].parent_value, 200);
-    assert_eq!(rows[2].id, 3);
-    assert_eq!(rows[2].ad, 30.0);
+    assert_eq!(rows.root_value[0], -7);
+    assert_eq!(rows.parent_value[0], 100);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.ad[0], 10.0);
+    assert_eq!(rows.root_value[1], -7);
+    assert_eq!(rows.parent_value[1], 100);
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.ad[1], 20.0);
+    assert_eq!(rows.root_value[2], -7);
+    assert_eq!(rows.parent_value[2], 200);
+    assert_eq!(rows.id[2], 3);
+    assert_eq!(rows.ad[2], 30.0);
 }
 
 // Case 2:

@@ -84,30 +84,30 @@ fn a_rows_join_multiple_optional_sources() {
 
     assert_eq!(rows.len(), 3);
 
-    assert_eq!(rows[0].a, 1);
-    assert_eq!(rows[0].b, Some(100));
-    assert_eq!(rows[0].c, Some(7));
-    assert_eq!(rows[0].d, None);
-    assert_eq!(rows[0].e, Some(70));
-    assert_eq!(rows[0].f_a, Some(10));
-    assert_eq!(rows[0].f_b, Some(700));
-    assert_eq!(rows[0].f_c, Some(1000));
+    assert_eq!(rows.a[0], 1);
+    assert_eq!(rows.b[0], Some(100));
+    assert_eq!(rows.c[0], Some(7));
+    assert_eq!(rows.d[0], None);
+    assert_eq!(rows.e[0], Some(70));
+    assert_eq!(rows.f_a[0], Some(10));
+    assert_eq!(rows.f_b[0], Some(700));
+    assert_eq!(rows.f_c[0], Some(1000));
 
-    assert_eq!(rows[1].a, 2);
-    assert_eq!(rows[1].b, None);
-    assert_eq!(rows[1].c, Some(11));
-    assert_eq!(rows[1].d, Some(2000));
-    assert_eq!(rows[1].e, None);
-    assert_eq!(rows[1].f_a, None);
-    assert_eq!(rows[1].f_b, None);
-    assert_eq!(rows[1].f_c, None);
+    assert_eq!(rows.a[1], 2);
+    assert_eq!(rows.b[1], None);
+    assert_eq!(rows.c[1], Some(11));
+    assert_eq!(rows.d[1], Some(2000));
+    assert_eq!(rows.e[1], None);
+    assert_eq!(rows.f_a[1], None);
+    assert_eq!(rows.f_b[1], None);
+    assert_eq!(rows.f_c[1], None);
 
-    assert_eq!(rows[2].a, 3);
-    assert_eq!(rows[2].b, Some(-30));
-    assert_eq!(rows[2].c, None);
-    assert_eq!(rows[2].d, Some(-3000));
-    assert_eq!(rows[2].e, Some(90));
-    assert_eq!(rows[2].f_a, Some(-30));
-    assert_eq!(rows[2].f_b, Some(900));
-    assert_eq!(rows[2].f_c, Some(3000));
+    assert_eq!(rows.a[2], 3);
+    assert_eq!(rows.b[2], Some(-30));
+    assert_eq!(rows.c[2], None);
+    assert_eq!(rows.d[2], Some(-3000));
+    assert_eq!(rows.e[2], Some(90));
+    assert_eq!(rows.f_a[2], Some(-30));
+    assert_eq!(rows.f_b[2], Some(900));
+    assert_eq!(rows.f_c[2], Some(3000));
 }

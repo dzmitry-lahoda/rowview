@@ -31,15 +31,15 @@ fn hash_map_projection_from_key_to_value() {
     .account_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].account_id, 1);
-    assert_eq!(rows[0].balance_account_id, Some(1));
-    assert_eq!(rows[0].balance, Some(100));
-    assert_eq!(rows[1].account_id, 2);
-    assert_eq!(rows[1].balance_account_id, None);
-    assert_eq!(rows[1].balance, None);
-    assert_eq!(rows[2].account_id, 3);
-    assert_eq!(rows[2].balance_account_id, Some(3));
-    assert_eq!(rows[2].balance, Some(-30));
+    assert_eq!(rows.account_id[0], 1);
+    assert_eq!(rows.balance_account_id[0], Some(1));
+    assert_eq!(rows.balance[0], Some(100));
+    assert_eq!(rows.account_id[1], 2);
+    assert_eq!(rows.balance_account_id[1], None);
+    assert_eq!(rows.balance[1], None);
+    assert_eq!(rows.account_id[2], 3);
+    assert_eq!(rows.balance_account_id[2], Some(3));
+    assert_eq!(rows.balance[2], Some(-30));
 }
 
 #[test]
@@ -78,19 +78,19 @@ fn btree_map_projection_from_key_to_value_with_multiple_joins() {
     .account_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].account_id, 1);
-    assert_eq!(rows[0].balance_account_id, Some(1));
-    assert_eq!(rows[0].balance, Some(100));
-    assert_eq!(rows[0].fee_account_id, None);
-    assert_eq!(rows[0].fee, None);
-    assert_eq!(rows[1].account_id, 2);
-    assert_eq!(rows[1].balance_account_id, None);
-    assert_eq!(rows[1].balance, None);
-    assert_eq!(rows[1].fee_account_id, Some(2));
-    assert_eq!(rows[1].fee, Some(7));
-    assert_eq!(rows[2].account_id, 3);
-    assert_eq!(rows[2].balance_account_id, Some(3));
-    assert_eq!(rows[2].balance, Some(-30));
-    assert_eq!(rows[2].fee_account_id, Some(3));
-    assert_eq!(rows[2].fee, Some(9));
+    assert_eq!(rows.account_id[0], 1);
+    assert_eq!(rows.balance_account_id[0], Some(1));
+    assert_eq!(rows.balance[0], Some(100));
+    assert_eq!(rows.fee_account_id[0], None);
+    assert_eq!(rows.fee[0], None);
+    assert_eq!(rows.account_id[1], 2);
+    assert_eq!(rows.balance_account_id[1], None);
+    assert_eq!(rows.balance[1], None);
+    assert_eq!(rows.fee_account_id[1], Some(2));
+    assert_eq!(rows.fee[1], Some(7));
+    assert_eq!(rows.account_id[2], 3);
+    assert_eq!(rows.balance_account_id[2], Some(3));
+    assert_eq!(rows.balance[2], Some(-30));
+    assert_eq!(rows.fee_account_id[2], Some(3));
+    assert_eq!(rows.fee[2], Some(9));
 }

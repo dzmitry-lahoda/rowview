@@ -41,7 +41,7 @@ fn rows_can_have_serde_attributes() {
     }
     .to_rows();
 
-    assert_eq!(rows.numbers[0].id, 1);
-    assert_eq!(rows.flags[0].flag_id, 1);
-    assert!(rows.flags[0].flag_value);
+    assert_eq!(rows.numbers.id[0], 1);
+    assert_eq!(rows.flags.flag_id[0], 1);
+    assert!(rows.flags.flag_value[0]);
 }

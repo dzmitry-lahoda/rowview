@@ -31,18 +31,18 @@ fn vec_tuple_vec_tuple_into_value() {
     .axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].direct_value, 10);
-    assert_eq!(rows[0].joined_value_key, 1);
-    assert_eq!(rows[0].joined_value, 100);
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].direct_value, 20);
-    assert_eq!(rows[1].joined_value_key, 2);
-    assert_eq!(rows[1].joined_value, 200);
-    assert_eq!(rows[2].id, 3);
-    assert_eq!(rows[2].direct_value, 30);
-    assert_eq!(rows[2].joined_value_key, 3);
-    assert_eq!(rows[2].joined_value, 300);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.direct_value[0], 10);
+    assert_eq!(rows.joined_value_key[0], 1);
+    assert_eq!(rows.joined_value[0], 100);
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.direct_value[1], 20);
+    assert_eq!(rows.joined_value_key[1], 2);
+    assert_eq!(rows.joined_value[1], 200);
+    assert_eq!(rows.id[2], 3);
+    assert_eq!(rows.direct_value[2], 30);
+    assert_eq!(rows.joined_value_key[2], 3);
+    assert_eq!(rows.joined_value[2], 300);
 }
 
 #[test]

@@ -30,7 +30,7 @@ fn schema_module_can_use_imports() {
     let rows = root.to_rows();
 
     assert_eq!(rows.axis_rows.len(), 3);
-    assert_eq!(rows.axis_rows[0].value, Imported(4));
-    assert_eq!(rows.axis_rows[1].value, Imported(5));
-    assert_eq!(rows.axis_rows[2].value, Imported(6));
+    assert_eq!(rows.axis_rows.value[0], Imported(4));
+    assert_eq!(rows.axis_rows.value[1], Imported(5));
+    assert_eq!(rows.axis_rows.value[2], Imported(6));
 }

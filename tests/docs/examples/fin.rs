@@ -120,10 +120,10 @@ fn all() {
 
     let schema = root.to_rows();
 
-    assert_eq!(schema.orders[0].market_id, 13);
-    assert_eq!(schema.orders[0].account_id, 1);
-    assert_eq!(schema.orders[0].order_id, 42);
-    assert_eq!(schema.orders[0].order_size, -500);
+    assert_eq!(schema.orders.market_id[0], 13);
+    assert_eq!(schema.orders.account_id[0], 1);
+    assert_eq!(schema.orders.order_id[0], 42);
+    assert_eq!(schema.orders.order_size[0], -500);
 }
 
 pub struct Fill {

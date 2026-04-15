@@ -31,18 +31,18 @@ fn vec_tuple_vec_tuple_into_option() {
     .axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].direct_value, 10);
-    assert_eq!(rows[0].joined_value_key, None);
-    assert_eq!(rows[0].joined_value, None);
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].direct_value, 20);
-    assert_eq!(rows[1].joined_value_key, Some(2));
-    assert_eq!(rows[1].joined_value, Some(200));
-    assert_eq!(rows[2].id, 3);
-    assert_eq!(rows[2].direct_value, 30);
-    assert_eq!(rows[2].joined_value_key, Some(3));
-    assert_eq!(rows[2].joined_value, Some(300));
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.direct_value[0], 10);
+    assert_eq!(rows.joined_value_key[0], None);
+    assert_eq!(rows.joined_value[0], None);
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.direct_value[1], 20);
+    assert_eq!(rows.joined_value_key[1], Some(2));
+    assert_eq!(rows.joined_value[1], Some(200));
+    assert_eq!(rows.id[2], 3);
+    assert_eq!(rows.direct_value[2], 30);
+    assert_eq!(rows.joined_value_key[2], Some(3));
+    assert_eq!(rows.joined_value[2], Some(300));
 }
 
 #[test]

@@ -30,12 +30,12 @@ fn map_getter_on_axis_works() {
     let rows = root.to_rows().axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].value, 10);
-    assert_eq!(rows[1].id, 3);
-    assert_eq!(rows[1].value, 30);
-    assert_eq!(rows[2].id, 2);
-    assert_eq!(rows[2].value, 60);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.value[0], 10);
+    assert_eq!(rows.id[1], 3);
+    assert_eq!(rows.value[1], 30);
+    assert_eq!(rows.id[2], 2);
+    assert_eq!(rows.value[2], 60);
 }
 
 #[test]
@@ -64,10 +64,10 @@ fn map_getter_on_root_works_with_copy() {
     let rows = root.to_rows().axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].value, 10);
-    assert_eq!(rows[1].id, 3);
-    assert_eq!(rows[1].value, 30);
-    assert_eq!(rows[2].id, 2);
-    assert_eq!(rows[2].value, 20);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.value[0], 10);
+    assert_eq!(rows.id[1], 3);
+    assert_eq!(rows.value[1], 30);
+    assert_eq!(rows.id[2], 2);
+    assert_eq!(rows.value[2], 20);
 }

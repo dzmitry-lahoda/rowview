@@ -31,9 +31,11 @@
 - semantics
   - update-form aware types like `Option<Option<T>>`, `Option<T>`, `Either<T, ()>`, or `Either<T, T>`, where `T` may or may not be `Default`.
   - delta-aggregatable or final-value aware (last written is correct)
+- soa output
 
 # Constraints and limitations
 
+- Crates using `rowview::rows` must depend on `soa_derive = "0.14"` directly.
 - Does not `Clone` input structures.
 - Supports conversion of data from trusted sources only.
 - Keys must be `Copy`.

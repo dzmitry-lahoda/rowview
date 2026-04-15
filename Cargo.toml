@@ -11,6 +11,7 @@ syn = { version = "2", features = ["full"] }
 quote = "*"
 proc-macro2 = { version = "1" }
 heck = "0.5"
+soa_derive = "0.14"
 strum = { version = "*", features = ["derive"] }
 # manyhow?
 

@@ -79,16 +79,16 @@ fn support_union_creates_rows_and_bindings_project_optionally() {
     .rows;
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].a_value, Some("a1"));
-    assert_eq!(rows[0].b_value, None);
-    assert_eq!(rows[0].c_value, Some("c1"));
-    assert_eq!(rows[0].d_value, None);
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].a_value, None);
-    assert_eq!(rows[1].b_value, Some("b2"));
-    assert_eq!(rows[1].c_value, None);
-    assert_eq!(rows[1].d_value, Some("d2"));
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.a_value[0], Some("a1"));
+    assert_eq!(rows.b_value[0], None);
+    assert_eq!(rows.c_value[0], Some("c1"));
+    assert_eq!(rows.d_value[0], None);
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.a_value[1], None);
+    assert_eq!(rows.b_value[1], Some("b2"));
+    assert_eq!(rows.c_value[1], None);
+    assert_eq!(rows.d_value[1], Some("d2"));
 }
 
 #[test]
@@ -118,8 +118,8 @@ fn inner_join_skips_axis_rows_without_match() {
     .rows;
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].value, "one");
-    assert_eq!(rows[1].id, 3);
-    assert_eq!(rows[1].value, "three");
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.value[0], "one");
+    assert_eq!(rows.id[1], 3);
+    assert_eq!(rows.value[1], "three");
 }

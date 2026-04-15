@@ -28,10 +28,10 @@ fn left_join_uses_latest_duplicate_key() {
     .axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].joined_value, Some(101));
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].joined_value, Some(201));
-    assert_eq!(rows[2].id, 3);
-    assert_eq!(rows[2].joined_value, Some(300));
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.joined_value[0], Some(101));
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.joined_value[1], Some(201));
+    assert_eq!(rows.id[2], 3);
+    assert_eq!(rows.joined_value[2], Some(300));
 }

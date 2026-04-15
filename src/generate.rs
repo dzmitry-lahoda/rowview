@@ -36,7 +36,8 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
         });
         quote! {
             #( #rust_attributes )*
-            #[derive(Clone, Debug, PartialEq)]
+            #[derive(Clone, Debug, PartialEq, ::soa_derive::StructOfArray)]
+            #[soa_derive(Clone, Debug, PartialEq)]
             pub struct #struct_name {
                 #( #field_defs, )*
             }
@@ -46,7 +47,7 @@ pub(crate) fn expand_rows(plan: DatabaseBuildPlan) -> Result<proc_macro2::TokenS
     let relation_fields = module.relations.iter().map(|relation| {
         let relation_name = &relation.relation_name;
         let struct_name = &relation.struct_name;
-        quote! { pub #relation_name: ::std::vec::Vec<#struct_name> }
+        quote! { pub #relation_name: <#struct_name as ::soa_derive::StructOfArray>::Type }
     });
 
     let builders = plan.relations.iter().map(|relation_plan| -> Result<_> {

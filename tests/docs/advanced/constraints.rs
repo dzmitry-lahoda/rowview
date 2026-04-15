@@ -61,14 +61,14 @@ fn generated_rows_do_not_clone_input_data() {
     let rows = root.to_rows();
 
     assert_eq!(rows.a_rows.len(), 1);
-    assert_eq!(rows.a_rows[0].a, 7);
-    assert_eq!(rows.a_rows[0].b, 1);
+    assert_eq!(rows.a_rows.a[0], 7);
+    assert_eq!(rows.a_rows.b[0], 1);
 
     assert_eq!(rows.b_rows.len(), 2);
-    assert_eq!(rows.b_rows[0].a, 7);
-    assert_eq!(rows.b_rows[0].b, 10);
-    assert_eq!(rows.b_rows[0].c, 4);
-    assert_eq!(rows.b_rows[1].a, 7);
-    assert_eq!(rows.b_rows[1].b, 11);
-    assert_eq!(rows.b_rows[1].c, 5);
+    assert_eq!(rows.b_rows.a[0], 7);
+    assert_eq!(rows.b_rows.b[0], 10);
+    assert_eq!(rows.b_rows.c[0], 4);
+    assert_eq!(rows.b_rows.a[1], 7);
+    assert_eq!(rows.b_rows.b[1], 11);
+    assert_eq!(rows.b_rows.c[1], 5);
 }

@@ -37,8 +37,8 @@ fn nested_static_reference_slices_survive_nested_axis() {
             key: &'static str,
             #[from_axis(axis.values)]
             values: StaticValues,
-            #[from_axis(axis.values.first().copied().unwrap())]
-            first_value: &'static u32,
+            #[from_axis(*axis.values.first().copied().unwrap())]
+            first_value: u32,
         }
     }
 
@@ -70,14 +70,14 @@ fn nested_static_reference_slices_survive_nested_axis() {
     .item_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].group_name, "letters");
-    assert_eq!(rows[0].key, "a");
-    assert_eq!(rows[0].values, &A_VALUES);
-    assert_eq!(rows[0].first_value, &1);
-    assert_eq!(rows[1].group_name, "letters");
-    assert_eq!(rows[1].first_value, &3);
-    assert_eq!(rows[2].group_name, "numbers");
-    assert_eq!(rows[2].first_value, &5);
+    assert_eq!(rows.group_name[0], "letters");
+    assert_eq!(rows.key[0], "a");
+    assert_eq!(rows.values[0], &A_VALUES);
+    assert_eq!(rows.first_value[0], 1);
+    assert_eq!(rows.group_name[1], "letters");
+    assert_eq!(rows.first_value[1], 3);
+    assert_eq!(rows.group_name[2], "numbers");
+    assert_eq!(rows.first_value[2], 5);
 }
 
 #[test]
@@ -96,8 +96,8 @@ fn fixed_size_arrays_of_static_references_survive_axis_rows() {
             key: &'static str,
             #[from_axis(axis.1)]
             pair: StaticValuePair,
-            #[from_axis(axis.1.get(1).copied().unwrap())]
-            second: &'static u32,
+            #[from_axis(*axis.1.get(1).copied().unwrap())]
+            second: u32,
         }
     }
 
@@ -108,12 +108,12 @@ fn fixed_size_arrays_of_static_references_survive_axis_rows() {
     .pair_rows;
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].key, "a");
-    assert_eq!(rows[0].pair, A_PAIR);
-    assert_eq!(rows[0].second, &8);
-    assert_eq!(rows[1].key, "b");
-    assert_eq!(rows[1].pair, B_PAIR);
-    assert_eq!(rows[1].second, &10);
+    assert_eq!(rows.key[0], "a");
+    assert_eq!(rows.pair[0], A_PAIR);
+    assert_eq!(rows.second[0], 8);
+    assert_eq!(rows.key[1], "b");
+    assert_eq!(rows.pair[1], B_PAIR);
+    assert_eq!(rows.second[1], 10);
 }
 
 #[test]
@@ -134,10 +134,10 @@ fn borrowed_lookup_slice_joins_to_reference_slice_axis() {
             key: &'static str,
             #[from_axis(axis.1)]
             values: StaticValues,
-            #[from_axis(axis.1.first().copied().unwrap())]
-            first: &'static u32,
-            #[select(select = override_value.1)]
-            override_value: Option<&'static u32>,
+            #[from_axis(*axis.1.first().copied().unwrap())]
+            first: u32,
+            #[select(select = *override_value.1)]
+            override_value: Option<u32>,
         }
     }
 
@@ -149,16 +149,16 @@ fn borrowed_lookup_slice_joins_to_reference_slice_axis() {
     .group_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].key, "a");
-    assert_eq!(rows[0].values, &A_VALUES);
-    assert_eq!(rows[0].first, &1);
-    assert_eq!(rows[0].override_value, None);
-    assert_eq!(rows[1].key, "b");
-    assert_eq!(rows[1].first, &3);
-    assert_eq!(rows[1].override_value, Some(&10));
-    assert_eq!(rows[2].key, "c");
-    assert_eq!(rows[2].first, &5);
-    assert_eq!(rows[2].override_value, None);
+    assert_eq!(rows.key[0], "a");
+    assert_eq!(rows.values[0], &A_VALUES);
+    assert_eq!(rows.first[0], 1);
+    assert_eq!(rows.override_value[0], None);
+    assert_eq!(rows.key[1], "b");
+    assert_eq!(rows.first[1], 3);
+    assert_eq!(rows.override_value[1], Some(10));
+    assert_eq!(rows.key[2], "c");
+    assert_eq!(rows.first[2], 5);
+    assert_eq!(rows.override_value[2], None);
 }
 
 #[test]
@@ -195,6 +195,6 @@ fn sum_nested_reference_values_into_axis_rows() {
     .abcs;
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].cs, 30);
-    assert_eq!(rows[1].cs, 12);
+    assert_eq!(rows.cs[0], 30);
+    assert_eq!(rows.cs[1], 12);
 }

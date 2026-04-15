@@ -35,10 +35,10 @@ fn increment_from_local_trait_method() {
     let incremented_rows = root.to_rows().incremented;
 
     assert_eq!(incremented_rows.len(), 3);
-    assert_eq!(incremented_rows[0].counter, 42);
-    assert_eq!(incremented_rows[1].counter, 43);
-    assert_eq!(incremented_rows[2].counter, 44);
-    assert_eq!(incremented_rows[0].rest, 0.5);
-    assert_eq!(incremented_rows[1].rest, 111.111);
-    assert_eq!(incremented_rows[2].rest, 666.0);
+    assert_eq!(incremented_rows.counter[0], 42);
+    assert_eq!(incremented_rows.counter[1], 43);
+    assert_eq!(incremented_rows.counter[2], 44);
+    assert_eq!(incremented_rows.rest[0], 0.5);
+    assert_eq!(incremented_rows.rest[1], 111.111);
+    assert_eq!(incremented_rows.rest[2], 666.0);
 }

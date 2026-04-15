@@ -31,14 +31,14 @@ fn index_success() {
 
     let rows = root.to_rows().axis_rows;
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].direct_value, 10);
-    assert_eq!(rows[0].joined_value_key, Some(1));
-    assert_eq!(rows[0].joined_value, Some(100));
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].direct_value, 20);
-    assert_eq!(rows[1].joined_value_key, Some(2));
-    assert_eq!(rows[1].joined_value, Some(200));
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.direct_value[0], 10);
+    assert_eq!(rows.joined_value_key[0], Some(1));
+    assert_eq!(rows.joined_value[0], Some(100));
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.direct_value[1], 20);
+    assert_eq!(rows.joined_value_key[1], Some(2));
+    assert_eq!(rows.joined_value[1], Some(200));
 }
 
 #[test]

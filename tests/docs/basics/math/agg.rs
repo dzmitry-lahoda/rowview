@@ -26,8 +26,8 @@ fn sum_nested_values_into_axis_rows() {
     .abcs;
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].cs, 30);
-    assert_eq!(rows[1].cs, 12);
+    assert_eq!(rows.cs[0], 30);
+    assert_eq!(rows.cs[1], 12);
 }
 
 /// Same as simple sum, but with a lifted accumulator.
@@ -67,6 +67,6 @@ fn sum_nested_values_into_axis_rows_with_cast() {
     .abcs;
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].cs, 4_294_967_296);
-    assert_eq!(rows[1].cs, 12);
+    assert_eq!(rows.cs[0], 4_294_967_296);
+    assert_eq!(rows.cs[1], 12);
 }

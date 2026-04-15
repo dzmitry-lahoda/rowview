@@ -22,7 +22,7 @@ fn singleton() {
     let singleton = Singleton { b: 42 };
     let rows = singleton.to_rows().abs;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].ab, 42);
+    assert_eq!(rows.ab[0], 42);
 }
 
 #[test]
@@ -58,6 +58,6 @@ fn deep_singleton() {
     };
     let rows = singleton.to_rows().abs;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].ab, 42);
-    assert_eq!(rows[0].cde, 33);
+    assert_eq!(rows.ab[0], 42);
+    assert_eq!(rows.cde[0], 33);
 }

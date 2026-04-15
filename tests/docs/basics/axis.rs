@@ -23,12 +23,12 @@ fn one() {
     let incremented_rows = root.to_rows().axis_one;
 
     assert_eq!(incremented_rows.len(), 3);
-    assert_eq!(incremented_rows[0].id, 'a');
-    assert_eq!(incremented_rows[1].id, 'b');
-    assert_eq!(incremented_rows[2].id, 'c');
-    assert_eq!(incremented_rows[0].rest, 0.5);
-    assert_eq!(incremented_rows[1].rest, 111.111);
-    assert_eq!(incremented_rows[2].rest, 666.0);
+    assert_eq!(incremented_rows.id[0], 'a');
+    assert_eq!(incremented_rows.id[1], 'b');
+    assert_eq!(incremented_rows.id[2], 'c');
+    assert_eq!(incremented_rows.rest[0], 0.5);
+    assert_eq!(incremented_rows.rest[1], 111.111);
+    assert_eq!(incremented_rows.rest[2], 666.0);
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn hash_set() {
 
     assert_eq!(rows.len(), 3);
 
-    let mut pairs: Vec<_> = rows.into_iter().map(|row| (row.id, row.value)).collect();
+    let mut pairs: Vec<_> = rows.iter().map(|row| (*row.id, *row.value)).collect();
     pairs.sort_unstable();
 
     assert_eq!(pairs, vec![(1, 10), (2, 20), (3, 30)]);
@@ -84,12 +84,12 @@ fn btree_set() {
     let rows = root.to_rows().axis_rows;
 
     assert_eq!(rows.len(), 3);
-    assert_eq!(rows[0].id, 1);
-    assert_eq!(rows[0].value, 10);
-    assert_eq!(rows[1].id, 2);
-    assert_eq!(rows[1].value, 20);
-    assert_eq!(rows[2].id, 3);
-    assert_eq!(rows[2].value, 30);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.value[0], 10);
+    assert_eq!(rows.id[1], 2);
+    assert_eq!(rows.value[1], 20);
+    assert_eq!(rows.id[2], 3);
+    assert_eq!(rows.value[2], 30);
 }
 
 /// 3 row sets from 3 separate axes.
@@ -136,24 +136,24 @@ fn three() {
     let rows = root.to_rows();
 
     assert_eq!(rows.letters.len(), 2);
-    assert_eq!(rows.letters[0].id, 'a');
-    assert_eq!(rows.letters[1].id, 'b');
-    assert_eq!(rows.letters[0].rest, 0.5);
-    assert_eq!(rows.letters[1].rest, 1.5);
+    assert_eq!(rows.letters.id[0], 'a');
+    assert_eq!(rows.letters.id[1], 'b');
+    assert_eq!(rows.letters.rest[0], 0.5);
+    assert_eq!(rows.letters.rest[1], 1.5);
 
     assert_eq!(rows.numbers.len(), 3);
-    assert_eq!(rows.numbers[0].id, 1);
-    assert_eq!(rows.numbers[1].id, 2);
-    assert_eq!(rows.numbers[2].id, 3);
-    assert!(rows.numbers[0].active);
-    assert!(!rows.numbers[1].active);
-    assert!(rows.numbers[2].active);
+    assert_eq!(rows.numbers.id[0], 1);
+    assert_eq!(rows.numbers.id[1], 2);
+    assert_eq!(rows.numbers.id[2], 3);
+    assert!(rows.numbers.active[0]);
+    assert!(!rows.numbers.active[1]);
+    assert!(rows.numbers.active[2]);
 
     assert_eq!(rows.words.len(), 2);
-    assert_eq!(rows.words[0].word, "alpha");
-    assert_eq!(rows.words[1].word, "beta");
-    assert_eq!(rows.words[0].score, 10);
-    assert_eq!(rows.words[1].score, 20);
+    assert_eq!(rows.words.word[0], "alpha");
+    assert_eq!(rows.words.word[1], "beta");
+    assert_eq!(rows.words.score[0], 10);
+    assert_eq!(rows.words.score[1], 20);
 }
 
 #[test]
@@ -181,10 +181,10 @@ fn axis_element_position_value() {
     .to_rows();
 
     assert_eq!(rows.axis_one.len(), 3);
-    assert_eq!(rows.axis_one[0].index, 0);
-    assert_eq!(rows.axis_one[1].index, 1);
-    assert_eq!(rows.axis_one[2].index, 2);
-    assert_eq!(rows.axis_one[0].index_capped, 0);
-    assert_eq!(rows.axis_one[1].index_capped, 1);
-    assert_eq!(rows.axis_one[2].index_capped, 2);
+    assert_eq!(rows.axis_one.index[0], 0);
+    assert_eq!(rows.axis_one.index[1], 1);
+    assert_eq!(rows.axis_one.index[2], 2);
+    assert_eq!(rows.axis_one.index_capped[0], 0);
+    assert_eq!(rows.axis_one.index_capped[1], 1);
+    assert_eq!(rows.axis_one.index_capped[2], 2);
 }
