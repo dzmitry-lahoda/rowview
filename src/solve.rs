@@ -1,6 +1,6 @@
 use crate::docs::{FieldKind, FieldMode, JoinKey};
 use crate::generate::{join_axis_for_expr, row_join_binding_ident};
-use crate::parse::parse_join_key;
+use crate::parse::{parse_join_key, parse_join_key_expr};
 use crate::schema::{
     AxisExistencePlan, BindingFilter, BindingLookup, BindingSpec, IndexJoinCardinalityPlan,
     RelationBuildPlan, RelationGenerator, RelationSchema, RowExistencePlan, RowJoinBindingPlan,
@@ -57,7 +57,7 @@ fn validate_relation_build_plan(
                     syn::Error::new(Span::call_site(), "zip join requires source")
                 })?;
                 let condition = join.condition.clone().ok_or_else(|| {
-                    syn::Error::new_spanned(&source, "zip join requires `on = ...`")
+                    syn::Error::new_spanned(&source, "zip join requires `on(...)`")
                 })?;
                 Ok(ZipJoinCoveragePlan {
                     source,
@@ -187,13 +187,13 @@ fn validate_join_key_condition(condition: &Expr) -> Result<()> {
     let Expr::Binary(binary) = condition else {
         return Err(syn::Error::new_spanned(
             condition,
-            "join `on = ...` must be a single id equality",
+            "join `on(...)` must be a single id equality",
         ));
     };
     if !matches!(binary.op, BinOp::Eq(_)) {
         return Err(syn::Error::new_spanned(
             condition,
-            "join `on = ...` must be a single id equality",
+            "join `on(...)` must be a single id equality",
         ));
     }
     validate_join_key_expr(&binary.left)?;
@@ -370,13 +370,15 @@ impl Parse for BindingSpec {
 
         while !input.is_empty() {
             let key = parse_join_key(input)?;
-            input.parse::<Token![=]>()?;
             match key {
-                JoinKey::Left | JoinKey::From => source = Some(input.parse()?),
-                JoinKey::As | JoinKey::Alias => alias = Some(input.parse()?),
-                JoinKey::By => key_expr = Some(input.parse()?),
+                JoinKey::Left | JoinKey::From => source = Some(parse_join_key_expr(input, key)?),
+                JoinKey::As | JoinKey::Alias => {
+                    input.parse::<Token![=]>()?;
+                    alias = Some(input.parse()?);
+                }
+                JoinKey::By => key_expr = Some(parse_join_key_expr(input, key)?),
                 JoinKey::Option | JoinKey::On => {
-                    let expr: Expr = input.parse()?;
+                    let expr = parse_join_key_expr(input, key)?;
                     filter = Some(parse_binding_filter_expr(&expr)?);
                 }
                 other => {
@@ -396,7 +398,7 @@ impl Parse for BindingSpec {
         let lookup = match key_expr {
             Some(expr) => BindingLookup::Key { expr },
             None => {
-                return Err(input.error("bind requires `by = ...`; `on = ...` may only add an any/all/not dependency filter"));
+                return Err(input.error("bind requires `by = ...`; `on(...)` may only add an any/all/not dependency filter"));
             }
         };
 

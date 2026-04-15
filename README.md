@@ -5,7 +5,7 @@
 - virtual row existence
   - `#[support(any(root.a[..].id, root.b[..].id))]` creates a row domain from the union of keys found in the listed sources.
   - `#[bind(left = root.a, as = a, by = a.id)]` resolves an optional binding for each support key.
-  - `#[bind(left = root.c, as = c, by = *c.id, on = all(any(a, b), not(d)))]` resolves an optional binding by key plus a restricted presence formula over earlier bindings.
+  - `#[bind(left = root.c, as = c, by = *c.id, on(all(any(a, b), not(d))))]` resolves an optional binding by key plus a restricted presence formula over earlier bindings.
   - `#[from_key(key)]` projects the virtual support key into a row field.
 - getters
   - fields
@@ -78,7 +78,7 @@ mod schema {
         left = root.c,
         as = c,
         by = *c.id,
-        on = all(any(a, b), not(d))
+        on(all(any(a, b), not(d)))
     )]
     struct Row {
         #[from_key(key)]
@@ -99,11 +99,11 @@ mod schema {
 
 `bind` is evaluated for each support key, in declaration order. `by = ...` is the only item/key match: the expression is evaluated against the current source item and compared to the current support key. It may dereference ids, for example `by = *c.id` or `by = *c.0`.
 
-`on = ...` is not an arbitrary Rust predicate. It is a restricted dependency formula over earlier bindings only. A bare binding alias means present, `not(alias)` means missing, and `any(...)` / `all(...)` compose those terms. For example, `on = all(any(a, b), not(d))` means bind `c` only when either `a` or `b` is present and `d` is missing. The formula cannot inspect joined item properties such as `c.allowed`, and it cannot introduce another key comparison; joins use ids only through `by = ...`.
+`on(...)` is not an arbitrary Rust predicate. It is a restricted dependency formula over earlier bindings only. A bare binding alias means present, `not(alias)` means missing, and `any(...)` / `all(...)` compose those terms. For example, `on(all(any(a, b), not(d)))` means bind `c` only when either `a` or `b` is present and `d` is missing. The formula cannot inspect joined item properties such as `c.allowed`, and it cannot introduce another key comparison; joins use ids only through `by = ...`.
 
 `select` over a `bind` returns `Option<T>`. Missing bindings project as `None`; present bindings project as `Some(...)`. The current implementation preserves the existing latest-match behavior by using the last matching source item for a binding.
 
-`#[joins(inner = ..., as = ..., on = ...)]` is the narrow row-level inner join form. It still uses the same latest-match lookup rule as `left` and `must`, but a missing joined item skips the whole axis row instead of projecting `None` or panicking. Because row skipping changes row existence, `inner` is accepted only on row-level `#[joins(...)]`, not on field-level `#[join(...)]`.
+`#[joins(inner = ..., as = ..., on(axis = value))]` is the narrow row-level inner join form. It still uses the same latest-match lookup rule as `left` and `must`, but a missing joined item skips the whole axis row instead of projecting `None` or panicking. Because row skipping changes row existence, `inner` is accepted only on row-level `#[joins(...)]`, not on field-level `#[join(...)]`.
 
 Parsing intentionally lowers surface syntax into a lower-level row-existence model before code generation. `axis = ...` and `support/bind` are parsed as user-facing syntax, then validation produces a `RowExistencePlan`. Code generation consumes that plan instead of reinterpreting the original attributes. That keeps future sugar isolated from the core row-building algorithm.
 

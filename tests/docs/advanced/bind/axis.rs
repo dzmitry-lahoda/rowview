@@ -29,11 +29,11 @@ fn a_rows_join_multiple_optional_sources() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = a_rows, axis = root.a)]
-        #[joins(left = root.b[..], as = b, on = *axis == b.0)]
-        #[joins(left = root.c[..], as = c, on = *axis == c.0)]
-        #[joins(left = root.d[..], as = d, on = *axis == d.0)]
-        #[joins(left = root.e[..], as = e, on = *axis == e.0)]
-        #[joins(left = root.f[..], as = f, on = *axis == f.0)]
+        #[joins(left = root.b[..], as = b, on(*axis = b.0))]
+        #[joins(left = root.c[..], as = c, on(*axis = c.0))]
+        #[joins(left = root.d[..], as = d, on(*axis = d.0))]
+        #[joins(left = root.e[..], as = e, on(*axis = e.0))]
+        #[joins(left = root.f[..], as = f, on(*axis = f.0))]
         struct A {
             #[from_axis(*axis)]
             a: u32,

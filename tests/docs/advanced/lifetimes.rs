@@ -128,7 +128,7 @@ fn borrowed_lookup_slice_joins_to_reference_slice_axis() {
         use super::StaticValues;
 
         #[rowset(name = group_rows, axis = root.groups)]
-        #[joins(left = root.overrides, as = override_value, on = axis.0 == override_value.0)]
+        #[joins(left = root.overrides, as = override_value, on(axis.0 = override_value.0))]
         struct GroupRow {
             #[from_axis(axis.0)]
             key: &'static str,

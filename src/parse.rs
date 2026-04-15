@@ -8,7 +8,7 @@ use crate::schema::{
 };
 use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, Item, ItemStruct, Result, Token, braced};
+use syn::{BinOp, Expr, Ident, Item, ItemStruct, Result, Token, braced, parenthesized};
 
 impl Parse for RowViewArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
@@ -258,29 +258,31 @@ impl Parse for JoinSpec {
 
         while !input.is_empty() {
             let key = parse_join_key(input)?;
-            input.parse::<Token![=]>()?;
             match key {
-                JoinKey::Left | JoinKey::From => source = Some(input.parse()?),
+                JoinKey::Left | JoinKey::From => source = Some(parse_join_key_expr(input, key)?),
                 JoinKey::Must => {
                     miss = JoinMiss::Panic;
-                    source = Some(input.parse()?);
+                    source = Some(parse_join_key_expr(input, key)?);
                 }
                 JoinKey::Inner => {
                     miss = JoinMiss::SkipRow;
-                    source = Some(input.parse()?);
+                    source = Some(parse_join_key_expr(input, key)?);
                 }
                 JoinKey::Zip => {
                     lookup = JoinLookup::Zip;
                     miss = JoinMiss::Panic;
-                    source = Some(input.parse()?);
+                    source = Some(parse_join_key_expr(input, key)?);
                 }
                 JoinKey::Index => {
                     lookup = JoinLookup::Index;
-                    source = Some(input.parse()?);
+                    source = Some(parse_join_key_expr(input, key)?);
                 }
-                JoinKey::As | JoinKey::Alias => alias = Some(input.parse()?),
-                JoinKey::Option | JoinKey::On => condition = Some(input.parse()?),
-                JoinKey::Value | JoinKey::Select => value = Some(input.parse()?),
+                JoinKey::As | JoinKey::Alias => {
+                    input.parse::<Token![=]>()?;
+                    alias = Some(input.parse()?);
+                }
+                JoinKey::Option | JoinKey::On => condition = Some(parse_join_key_expr(input, key)?),
+                JoinKey::Value | JoinKey::Select => value = Some(parse_join_key_expr(input, key)?),
                 JoinKey::By => {
                     return Err(syn::Error::new(
                         Span::call_site(),
@@ -300,7 +302,7 @@ impl Parse for JoinSpec {
             condition: if matches!(lookup, JoinLookup::Index) {
                 condition
             } else {
-                Some(condition.ok_or_else(|| input.error("missing join condition (`on = ...`)"))?)
+                Some(condition.ok_or_else(|| input.error("missing join condition (`on(...)`)"))?)
             },
             lookup,
             miss,
@@ -316,6 +318,37 @@ pub(crate) fn parse_join_key(input: ParseStream<'_>) -> Result<JoinKey> {
     } else {
         input.parse::<Ident>()?.try_into()
     }
+}
+
+pub(crate) fn parse_join_key_expr(input: ParseStream<'_>, key: JoinKey) -> Result<Expr> {
+    let expr: Expr =
+        if matches!(key, JoinKey::On | JoinKey::Option) && input.peek(syn::token::Paren) {
+            let content;
+            parenthesized!(content in input);
+            let expr = content.parse()?;
+            if !content.is_empty() {
+                return Err(content.error("expected a single expression"));
+            }
+            expr
+        } else {
+            input.parse::<Token![=]>()?;
+            input.parse()?
+        };
+    Ok(normalize_join_key_expr(key, expr))
+}
+
+fn normalize_join_key_expr(key: JoinKey, expr: Expr) -> Expr {
+    if matches!(key, JoinKey::On | JoinKey::Option) {
+        if let Expr::Assign(assign) = expr {
+            return Expr::Binary(syn::ExprBinary {
+                attrs: assign.attrs,
+                left: assign.left,
+                op: BinOp::Eq(Default::default()),
+                right: assign.right,
+            });
+        }
+    }
+    expr
 }
 
 pub(crate) fn validate_rows(args: RowViewArgs, module: SchemaModule) -> Result<DatabaseBuildPlan> {

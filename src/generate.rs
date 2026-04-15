@@ -478,12 +478,12 @@ fn rewrite_join_agg_sum_expr(
         .or_else(|| parse_join_axis_expr(value_expr))
         .ok_or_else(|| syn::Error::new_spanned(
             value_expr,
-            "agg expression must provide a join source like `#[joins(left = root.values[..], as = vals, on = ...)]`",
+            "agg expression must provide a join source like `#[joins(left = root.values[..], as = vals, on(axis = vals.id))]`",
         ))?;
     let condition_expr = join
         .condition
         .as_ref()
-        .ok_or_else(|| syn::Error::new_spanned(value_expr, "join agg requires `on = ...`"))?;
+        .ok_or_else(|| syn::Error::new_spanned(value_expr, "join agg requires `on(...)`"))?;
     let join_iter = rewrite_source_expr(&join_axis, ROOT_ATTR, quote! { self });
     let condition = rewrite_join_context_expr(
         condition_expr,
@@ -538,7 +538,7 @@ fn rewrite_join_lookup_expr(
     let condition_expr = join
         .condition
         .as_ref()
-        .ok_or_else(|| syn::Error::new_spanned(&join_axis, "join lookup requires `on = ...`"))?;
+        .ok_or_else(|| syn::Error::new_spanned(&join_axis, "join lookup requires `on(...)`"))?;
     let condition = rewrite_join_context_expr(
         condition_expr,
         nested_generator,
@@ -627,7 +627,7 @@ pub(crate) fn join_axis_for_expr(join: &JoinSpec, value_expr: Option<&Expr>) -> 
         .or_else(|| join.condition.as_ref().and_then(parse_join_axis_expr))
         .or_else(|| value_expr.and_then(parse_join_axis_expr))
         .ok_or_else(|| {
-            let message = "join expression must provide a source like `#[join(root.values[..], on = ..., select = ...)]` or reference a collection slice like `root.values[..].field`";
+            let message = "join expression must provide a source like `#[join(root.values[..], on(axis = value.id), select = ...)]` or reference a collection slice like `root.values[..].field`";
             value_expr
                 .or(join.condition.as_ref())
                 .or(join.source.as_ref())

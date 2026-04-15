@@ -11,7 +11,7 @@ fn left_join_uses_latest_duplicate_key() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = axis_rows, axis = root.axis)]
-        #[joins(left = root.values[..], as = vals, on = axis.0 == vals.0)]
+        #[joins(left = root.values[..], as = vals, on(axis.0 = vals.0))]
         struct AxisRow {
             #[from_axis(axis.0)]
             id: u32,

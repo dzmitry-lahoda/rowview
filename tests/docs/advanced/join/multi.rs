@@ -40,7 +40,7 @@ fn support_union_creates_rows_and_bindings_project_optionally() {
             left = root.c,
             as = c,
             by = *c.id,
-            on = all(any(a, b), not(d))
+            on(all(any(a, b), not(d)))
         )]
         struct Row {
             #[from_key(key)]
@@ -101,7 +101,7 @@ fn inner_join_skips_axis_rows_without_match() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = rows, axis = root.ids)]
-        #[joins(inner = root.values[..], as = value, on = *axis == value.0)]
+        #[joins(inner = root.values[..], as = value, on(*axis = value.0))]
         struct Row {
             #[from_axis(*axis)]
             id: u32,

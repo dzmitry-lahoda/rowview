@@ -11,7 +11,7 @@ fn zip_success() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = axis_rows, axis = root.axis)]
-        #[joins(zip = root.values[..], as = vals, on = axis.0 == vals.0)]
+        #[joins(zip = root.values[..], as = vals, on(axis.0 = vals.0))]
         struct AxisRow {
             #[from_axis(axis.0)]
             id: u32,
@@ -49,7 +49,7 @@ fn zip_panics_when_axis_item_has_no_joined_item() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = axis_rows, axis = root.axis)]
-        #[joins(zip = root.values[..], as = vals, on = axis.0 == vals.0)]
+        #[joins(zip = root.values[..], as = vals, on(axis.0 = vals.0))]
         struct AxisRow {
             #[select(select = vals.1)]
             joined_value: u16,
@@ -75,7 +75,7 @@ fn zip_panics_when_joined_item_has_no_axis_item() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = axis_rows, axis = root.axis)]
-        #[joins(zip = root.values[..], as = vals, on = axis.0 == vals.0)]
+        #[joins(zip = root.values[..], as = vals, on(axis.0 = vals.0))]
         struct AxisRow {
             #[from_axis(axis.0)]
             id: u32,

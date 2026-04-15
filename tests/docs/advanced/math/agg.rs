@@ -12,7 +12,7 @@ fn sum_over_left_join() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = abcs, axis = root.a)]
-        #[joins(left = root.b[..], as = b, on = axis.0 == b.0)]
+        #[joins(left = root.b[..], as = b, on(axis.0 = b.0))]
         struct Abcs {
             #[from_axis(axis.0)]
             a: u64,
@@ -47,7 +47,7 @@ fn sum_over_hash_map_left_join() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = abcs, axis = root.a)]
-        #[joins(left = root.b, as = b, on = axis.0 == *b.0)]
+        #[joins(left = root.b, as = b, on(axis.0 = *b.0))]
         struct Abcs {
             #[from_axis(axis.0)]
             a: u64,

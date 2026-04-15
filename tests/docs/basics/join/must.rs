@@ -10,7 +10,7 @@ fn vec_tuple_vec_tuple_into_value() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = axis_rows, axis = root.axis)]
-        #[joins(must = root.values[..], as = vals, on = axis.0 == vals.0)]
+        #[joins(must = root.values[..], as = vals, on(axis.0 = vals.0))]
         struct AxisRow {
             #[from_axis(axis.0)]
             id: u32,
@@ -56,7 +56,7 @@ fn panics_when_item_not_found() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = axis_rows, axis = root.axis)]
-        #[joins(must = root.values[..], as = vals, on = axis.0 == vals.0)]
+        #[joins(must = root.values[..], as = vals, on(axis.0 = vals.0))]
         struct AxisRow {
             #[from_axis(axis.0)]
             id: u32,

@@ -12,7 +12,7 @@ fn hash_map_projection_from_key_to_value() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = account_rows, axis = root.accounts)]
-        #[joins(left = root.balances, as = balance, on = *axis == *balance.0)]
+        #[joins(left = root.balances, as = balance, on(*axis = *balance.0))]
         struct AccountRow {
             #[from_axis(*axis)]
             account_id: u32,
@@ -53,8 +53,8 @@ fn btree_map_projection_from_key_to_value_with_multiple_joins() {
     #[rowview::rows(root = Root)]
     mod schema {
         #[rowset(name = account_rows, axis = root.accounts)]
-        #[joins(left = root.balances, as = balance, on = *axis == *balance.0)]
-        #[joins(left = root.fees, as = fee, on = *axis == *fee.0)]
+        #[joins(left = root.balances, as = balance, on(*axis = *balance.0))]
+        #[joins(left = root.fees, as = fee, on(*axis = *fee.0))]
         struct AccountRow {
             #[from_axis(*axis)]
             account_id: u32,
