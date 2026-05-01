@@ -1,6 +1,8 @@
 //! Full join, panics if not found.
 
-use rowview::oql::*;
+#[path = "../../../../../src/oql.rs"]
+mod oql;
+use oql::*;
 
 #[test]
 fn vec_tuple_vec_tuple_into_value_2() {
@@ -9,7 +11,7 @@ fn vec_tuple_vec_tuple_into_value_2() {
         values: Vec<(u32, u16)>,
     }
 
-    #[derive(layout::SOA)]
+    #[rowview::OqlRow]
     struct AxisRow {
         id: u32,
         direct_value: u8,
@@ -22,14 +24,9 @@ fn vec_tuple_vec_tuple_into_value_2() {
         values: vec![(1, 100), (2, 200), (3, 300)],
     };
 
-    let rows: AxisRowVec = select::<AxisRow>::from(&root.axis)
+    let rows = select::<AxisRow>::from(&root.axis)
         .join_must(&root.values, |axis, vals| axis.0 == vals.0)
-        .project(|axis, vals| AxisRow {
-            id: axis.0,
-            direct_value: axis.1,
-            joined_value_key: vals.0,
-            joined_value: vals.1,
-        })
+        .project(|axis, vals| (axis.0, axis.1, vals.0, vals.1))
         .execute();
 
     assert_eq!(rows.len(), 3);

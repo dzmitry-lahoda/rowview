@@ -3,14 +3,19 @@ name = "rowview"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+proc-macro = true
+
 [dependencies]
+heck = "0.5"
 layout = "0.0.1"
-rowview_macros = { path = "rowview_macros" }
+proc-macro2 = "1"
+quote = "1"
+strum = { version = "0.28", features = ["derive"] }
+syn = { version = "2", features = ["full"] }
 # manyhow?
 
 [dev-dependencies]
+derive_more = { version = "2", features = ["from"] }
 serde = { version = "1", features = ["derive"] }
 subdef ={ version = "*" }
-
-[workspace]
-members = ["rowview_macros"]

@@ -15,12 +15,12 @@ pub struct SelectJoinMust<Row, Axis, Join, Predicate> {
     _types: PhantomData<fn() -> (Row, Axis, Join, Predicate)>,
 }
 
-pub struct SelectProject<Row, Axis, Join, Predicate, Projection> {
+pub struct SelectProject<Row, Axis, Join, Predicate, Projection, Projected> {
     axis: Axis,
     join: Join,
     predicate: Predicate,
     projection: Projection,
-    _types: PhantomData<fn() -> (Row, Axis, Join, Predicate, Projection)>,
+    _types: PhantomData<fn() -> (Row, Axis, Join, Predicate, Projection, Projected)>,
 }
 
 pub trait QuerySource {
@@ -85,12 +85,13 @@ where
     Join: QuerySource,
     Predicate: FnMut(&Axis::Item, &Join::Item) -> bool,
 {
-    pub fn project<Projection>(
+    pub fn project<Projection, Projected>(
         self,
         projection: Projection,
-    ) -> SelectProject<Row, Axis, Join, Predicate, Projection>
+    ) -> SelectProject<Row, Axis, Join, Predicate, Projection, Projected>
     where
-        Projection: FnMut(&Axis::Item, &Join::Item) -> Row,
+        Projection: FnMut(&Axis::Item, &Join::Item) -> Projected,
+        Projected: Into<Row>,
     {
         SelectProject {
             axis: self.axis,
@@ -102,12 +103,14 @@ where
     }
 }
 
-impl<Row, Axis, Join, Predicate, Projection> SelectProject<Row, Axis, Join, Predicate, Projection>
+impl<Row, Axis, Join, Predicate, Projection, Projected>
+    SelectProject<Row, Axis, Join, Predicate, Projection, Projected>
 where
     Axis: QuerySource,
     Join: QuerySource,
     Predicate: FnMut(&Axis::Item, &Join::Item) -> bool,
-    Projection: FnMut(&Axis::Item, &Join::Item) -> Row,
+    Projection: FnMut(&Axis::Item, &Join::Item) -> Projected,
+    Projected: Into<Row>,
     Row: layout::SOA,
     <Row as layout::SOA>::Type: FromIterator<Row>,
 {
@@ -130,6 +133,7 @@ where
                     axis_item,
                     matching_join.expect("rowview must join found no matching item"),
                 )
+                .into()
             })
             .collect()
     }
