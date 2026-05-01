@@ -1,8 +1,8 @@
 mod docs;
 mod generate;
-mod oql_row;
 mod parse;
 mod schema;
+mod select;
 mod solve;
 
 use proc_macro::TokenStream;
@@ -20,9 +20,8 @@ pub fn rows(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-#[allow(non_snake_case)]
-pub fn OqlRow(args: TokenStream, input: TokenStream) -> TokenStream {
-    oql_row::expand(args.into(), input.into())
+pub fn select(args: TokenStream, input: TokenStream) -> TokenStream {
+    select::expand(args.into(), input.into())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }

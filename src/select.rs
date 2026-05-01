@@ -6,7 +6,7 @@ pub(crate) fn expand(args: TokenStream, input: TokenStream) -> Result<TokenStrea
     if !args.is_empty() {
         return Err(syn::Error::new_spanned(
             args,
-            "`#[rowview::OqlRow]` does not accept arguments",
+            "`#[rowview::Select]` does not accept arguments",
         ));
     }
 
