@@ -71,3 +71,34 @@ fn map_getter_on_root_works_with_copy() {
     assert_eq!(rows.id[2], 2);
     assert_eq!(rows.value[2], 20);
 }
+
+#[test]
+fn immutable_root_getter_method_on_axis_forms_column() {
+    struct Root {
+        ids: Vec<u32>,
+    }
+
+    impl Root {
+        fn get(&self) -> Vec<u32> {
+            self.ids.clone()
+        }
+    }
+
+    #[rowview::rows(root = Root)]
+    mod schema {
+        #[rowset(name = axis_rows, axis = root.get())]
+        struct AxisRow {
+            #[from_axis(*axis)]
+            id: u32,
+        }
+    }
+
+    let root = Root { ids: vec![1, 3, 2] };
+
+    let rows = root.to_rows().axis_rows;
+
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.id[0], 1);
+    assert_eq!(rows.id[1], 3);
+    assert_eq!(rows.id[2], 2);
+}

@@ -9,6 +9,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "layout"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a49cfd55e7a21291c245c09806c6c02600cd12fb9dc7f7edcfbe2811541993"
+dependencies = [
+ "layout_internal",
+ "permutation",
+ "rustc_version",
+]
+
+[[package]]
+name = "layout_internal"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cf08c0d5c736168aae74b962c4451fbad15500d49f282ee1e010f2453ddfbca"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "permutation"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -36,13 +58,20 @@ dependencies = [
 name = "rowview"
 version = "0.1.0"
 dependencies = [
+ "layout",
+ "rowview_macros",
+ "serde",
+ "subdef",
+]
+
+[[package]]
+name = "rowview_macros"
+version = "0.1.0"
+dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "serde",
- "soa_derive",
  "strum",
- "subdef",
  "syn",
 ]
 
@@ -85,28 +114,6 @@ name = "serde_derive"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "soa_derive"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47e4eaf24a10828e918ed1e0265de81ad86800f16c6834df8e664b623dec4206"
-dependencies = [
- "permutation",
- "rustc_version",
- "soa_derive_internal",
-]
-
-[[package]]
-name = "soa_derive_internal"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "039896b91e8c5b22d8acdf2206c72904a83d58d138d10e4bca62c16fdae1b744"
 dependencies = [
  "proc-macro2",
  "quote",
