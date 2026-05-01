@@ -39,7 +39,6 @@ fn zip_success() {
 }
 
 #[test]
-#[should_panic(expected = "rowview must join found no matching item")]
 fn zip_panics_when_axis_item_has_no_joined_item() {
     struct Root {
         axis: Vec<(u32, u8)>,
@@ -56,12 +55,22 @@ fn zip_panics_when_axis_item_has_no_joined_item() {
         }
     }
 
-    let _rows = Root {
-        axis: vec![(1, 10), (2, 20)],
-        values: vec![(1, 100)],
-    }
-    .to_rows()
-    .axis_rows;
+    let panic = scoped_panic_hook::catch_panic(|| {
+        let _rows = Root {
+            axis: vec![(1, 10), (2, 20)],
+            values: vec![(1, 100)],
+        }
+        .to_rows()
+        .axis_rows;
+    })
+    .expect_err("missing zip join should panic");
+
+    assert!(
+        panic
+            .display_with_backtrace()
+            .to_string()
+            .contains("rowview must join found no matching item")
+    );
 }
 
 #[test]

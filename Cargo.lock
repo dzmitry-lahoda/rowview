@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "defer"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "930c7171c8df9fb1782bdf9b918ed9ed2d33d1d22300abb754f9085bc48bf8e8"
+
+[[package]]
 name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -84,6 +90,7 @@ dependencies = [
  "layout",
  "proc-macro2",
  "quote",
+ "scoped-panic-hook",
  "serde",
  "strum",
  "subdef",
@@ -97,6 +104,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
 dependencies = [
  "semver",
+]
+
+[[package]]
+name = "scoped-panic-hook"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2404da6d2129d4c2855b4039fb96e95e357729524689a32ce9549d4499077e35"
+dependencies = [
+ "defer",
+ "rustc_version",
 ]
 
 [[package]]

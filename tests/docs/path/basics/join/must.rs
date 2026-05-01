@@ -46,7 +46,6 @@ fn vec_tuple_vec_tuple_into_value() {
 }
 
 #[test]
-#[should_panic(expected = "rowview must join found no matching item")]
 fn panics_when_item_not_found() {
     struct Root {
         axis: Vec<(u32, u8)>,
@@ -65,10 +64,20 @@ fn panics_when_item_not_found() {
         }
     }
 
-    let _rows = Root {
-        axis: vec![(1, 10), (2, 20)],
-        values: vec![(1, 100)],
-    }
-    .to_rows()
-    .axis_rows;
+    let panic = scoped_panic_hook::catch_panic(|| {
+        let _rows = Root {
+            axis: vec![(1, 10), (2, 20)],
+            values: vec![(1, 100)],
+        }
+        .to_rows()
+        .axis_rows;
+    })
+    .expect_err(crate::docs::MISSING_MUST_JOIN_SHOULD_PANIC);
+
+    assert!(
+        panic
+            .display_with_backtrace()
+            .to_string()
+            .contains("rowview must join found no matching item")
+    );
 }

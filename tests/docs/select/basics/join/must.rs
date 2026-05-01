@@ -41,3 +41,37 @@ fn vec_tuple_vec_tuple_into_value_2() {
     assert_eq!(rows.joined_value_key[2], 3);
     assert_eq!(rows.joined_value[2], 300);
 }
+
+#[test]
+fn panics_when_item_not_found() {
+    struct Root {
+        axis: Vec<(u32, u8)>,
+        values: Vec<(u32, u16)>,
+    }
+
+    #[rowview::select]
+    struct AxisRow {
+        id: u32,
+        joined_value: u16,
+    }
+
+    let panic = scoped_panic_hook::catch_panic(|| {
+        let root = Root {
+            axis: vec![(1, 10), (2, 20)],
+            values: vec![(1, 100)],
+        };
+
+        let _rows = select::<AxisRow>::from(&root.axis)
+            .join_must(&root.values, |axis, vals| axis.0 == vals.0)
+            .project(|axis, vals| (axis.0, vals.1))
+            .execute();
+    })
+    .expect_err(crate::docs::MISSING_MUST_JOIN_SHOULD_PANIC);
+
+    assert!(
+        panic
+            .display_with_backtrace()
+            .to_string()
+            .contains("rowview must join found no matching item")
+    );
+}

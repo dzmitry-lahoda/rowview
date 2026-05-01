@@ -17,5 +17,6 @@ syn = { version = "2", features = ["full"] }
 
 [dev-dependencies]
 derive_more = { version = "2", features = ["from"] }
+scoped-panic-hook = "0.1"
 serde = { version = "1", features = ["derive"] }
 subdef ={ version = "*" }
