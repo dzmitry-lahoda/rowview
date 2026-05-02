@@ -1,6 +1,6 @@
 //! Full join, panics if not found.
 
-use crate::docs::select::query::*;
+use rowview::query::*;
 
 #[test]
 fn vec_tuple_vec_tuple_into_value_2() {
@@ -23,8 +23,8 @@ fn vec_tuple_vec_tuple_into_value_2() {
     };
 
     let rows = select::<AxisRow>::from(&root.axis)
-        .join_must(&root.values, |axis, vals| axis.0 == vals.0)
-        .project(|axis, vals| (axis.0, axis.1, vals.0, vals.1))
+        .join_must(&root.values, on(axis::_0.eq(vals::_0)))
+        .project((axis::_0, axis::_1, vals::_0, vals::_1))
         .execute();
 
     assert_eq!(rows.len(), 3);
@@ -62,8 +62,8 @@ fn panics_when_item_not_found() {
         };
 
         let _rows = select::<AxisRow>::from(&root.axis)
-            .join_must(&root.values, |axis, vals| axis.0 == vals.0)
-            .project(|axis, vals| (axis.0, vals.1))
+            .join_must(&root.values, on(axis::_0.eq(vals::_0)))
+            .project((axis::_0, vals::_1))
             .execute();
     })
     .expect_err(crate::docs::MISSING_MUST_JOIN_SHOULD_PANIC);

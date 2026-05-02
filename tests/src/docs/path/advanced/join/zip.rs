@@ -74,7 +74,6 @@ fn zip_panics_when_axis_item_has_no_joined_item() {
 }
 
 #[test]
-#[should_panic(expected = "rowview zip join found joined item with no matching axis item")]
 fn zip_panics_when_joined_item_has_no_axis_item() {
     struct Root {
         axis: Vec<(u32, u8)>,
@@ -93,10 +92,20 @@ fn zip_panics_when_joined_item_has_no_axis_item() {
         }
     }
 
-    let _rows = Root {
-        axis: vec![(1, 10)],
-        values: vec![(1, 100), (2, 200)],
-    }
-    .to_rows()
-    .axis_rows;
+    let panic = scoped_panic_hook::catch_panic(|| {
+        let _rows = Root {
+            axis: vec![(1, 10)],
+            values: vec![(1, 100), (2, 200)],
+        }
+        .to_rows()
+        .axis_rows;
+    })
+    .expect_err(crate::docs::ZIP_JOIN_EXTRA_JOINED_ITEM_SHOULD_PANIC);
+
+    assert!(
+        panic
+            .display_with_backtrace()
+            .to_string()
+            .contains("rowview zip join found joined item with no matching axis item")
+    );
 }

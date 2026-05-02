@@ -3,20 +3,11 @@ name = "rowview"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-proc-macro = true
+[workspace]
+members = ["rowview_macro", "tests"]
 
 [dependencies]
-heck = "0.5"
 layout = "0.0.1"
-proc-macro2 = "1"
-quote = "1"
-strum = { version = "0.28", features = ["derive"] }
-syn = { version = "2", features = ["full"] }
-# manyhow?
+rowview_macro = { path = "rowview_macro" }
+konst = {version = "0.4.3", features = ["rust_latest_stable", "cmp", "iter", "alloc" ]}
 
-[dev-dependencies]
-derive_more = { version = "2", features = ["from"] }
-scoped-panic-hook = "0.1"
-serde = { version = "1", features = ["derive"] }
-subdef ={ version = "*" }

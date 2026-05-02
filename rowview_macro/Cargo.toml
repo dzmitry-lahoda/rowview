@@ -1,0 +1,15 @@
+[package]
+name = "rowview_macro"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+heck = "0.5"
+layout = "0.0.1"
+proc-macro2 = "1"
+quote = "1"
+strum = { version = "0.28", features = ["derive"] }
+syn = { version = "2", features = ["full"] }

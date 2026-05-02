@@ -42,9 +42,6 @@ fn index_success() {
 }
 
 #[test]
-#[should_panic(
-    expected = "rowview index join requires axis and joined collection lengths to match"
-)]
 fn index_panics_when_joined_len_is_shorter() {
     struct Root {
         axis: Vec<(u32, u8)>,
@@ -63,18 +60,25 @@ fn index_panics_when_joined_len_is_shorter() {
         }
     }
 
-    let root = Root {
-        axis: vec![(1, 10), (2, 20)],
-        values: vec![100],
-    };
+    let panic = scoped_panic_hook::catch_panic(|| {
+        let root = Root {
+            axis: vec![(1, 10), (2, 20)],
+            values: vec![100],
+        };
 
-    let _rows = root.to_rows().axis_rows;
+        let _rows = root.to_rows().axis_rows;
+    })
+    .expect_err(crate::docs::INDEX_JOIN_LENGTH_MISMATCH_SHOULD_PANIC);
+
+    assert!(
+        panic
+            .display_with_backtrace()
+            .to_string()
+            .contains("rowview index join requires axis and joined collection lengths to match")
+    );
 }
 
 #[test]
-#[should_panic(
-    expected = "rowview index join requires axis and joined collection lengths to match"
-)]
 fn index_panics_when_joined_len_is_longer() {
     struct Root {
         axis: Vec<(u32, u8)>,
@@ -93,10 +97,20 @@ fn index_panics_when_joined_len_is_longer() {
         }
     }
 
-    let root = Root {
-        axis: vec![(1, 10)],
-        values: vec![100, 200],
-    };
+    let panic = scoped_panic_hook::catch_panic(|| {
+        let root = Root {
+            axis: vec![(1, 10)],
+            values: vec![100, 200],
+        };
 
-    let _rows = root.to_rows().axis_rows;
+        let _rows = root.to_rows().axis_rows;
+    })
+    .expect_err(crate::docs::INDEX_JOIN_LENGTH_MISMATCH_SHOULD_PANIC);
+
+    assert!(
+        panic
+            .display_with_backtrace()
+            .to_string()
+            .contains("rowview index join requires axis and joined collection lengths to match")
+    );
 }
